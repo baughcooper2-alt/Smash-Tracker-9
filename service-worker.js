@@ -1,4 +1,4 @@
-const CACHE = 'smash-tracker-v3';
+const CACHE = 'smash-tracker-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './roster-seed.json'];
 
 self.addEventListener('install', (e) => {
