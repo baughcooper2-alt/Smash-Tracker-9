@@ -127,8 +127,11 @@
   .pair { display:flex; flex-direction:column; gap:12px; }
   .pair h1 { font-size:22px; line-height:1.1; }
   .pair p { font-size:13px; line-height:1.45; opacity:.75; font-weight:600; }
-  .pair input { width:100%; padding:14px; text-align:center; font-family:'Archivo Black', Archivo, sans-serif; font-size:34px; letter-spacing:.3em; text-transform:uppercase;
-    background:#f7efdb; border:3.5px solid var(--ink); border-radius:12px; color:var(--ink); -webkit-user-select:text; user-select:text; }
+  .pair input { width:100%; padding:13px 12px; font-size:16px; font-weight:700;
+    background:#f7efdb; border:3px solid var(--ink); border-radius:11px; color:var(--ink); -webkit-user-select:text; user-select:text; }
+  .pair .err { padding:9px 11px; background:#fbe1dc; border:2.5px solid var(--ink); border-radius:9px; font-size:12.5px; line-height:1.4; }
+  .pair .alt { padding:12px; border:3px solid var(--ink); border-radius:12px; background:var(--paper); font-size:13px; letter-spacing:.08em; }
+  .go[disabled], .pair .alt[disabled] { opacity:.55; }
   .go { padding:15px; background:var(--ink); color:var(--paper); border:3px solid var(--ink); border-radius:12px; box-shadow:4px 4px 0 rgba(232,64,42,.9); font-size:15px; letter-spacing:.08em; }
 
   /* stock sheet */
@@ -188,58 +191,81 @@
 </div>
 <div id="toast"></div>
 
-<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="sync.js"></script>
 <script>
 (function(){
   'use strict';
-  var PREFIX = 'smashtracker9-';
-  var STORE = 'smashremote.v1';
-  var CODE_RE = /^[A-Z0-9]{5}$/;
+  var STORE = 'smashremote.v2';
+  var ROSTER = [
+    {id:'ember',name:'EMBER',color:'#e8402a'},{id:'volt',name:'VOLT',color:'#ffd400'},
+    {id:'bramble',name:'BRAMBLE',color:'#2ea86a'},{id:'tide',name:'TIDE',color:'#1f6fd0'},
+    {id:'quarry',name:'QUARRY',color:'#8a6a4a'},{id:'moth',name:'MOTH',color:'#9b6ad4'},
+    {id:'cinder',name:'CINDER',color:'#ff7a29'},{id:'pip',name:'PIP',color:'#f06fa8'},
+    {id:'gale',name:'GALE',color:'#4fc3d9'},{id:'rust',name:'RUST',color:'#b4471f'},
+    {id:'koi',name:'KOI',color:'#ff5f7e'},{id:'nova',name:'NOVA',color:'#5b5bd6'},
+    {id:'basalt',name:'BASALT',color:'#4a4a52'},{id:'wren',name:'WREN',color:'#78b843'},
+    {id:'husk',name:'HUSK',color:'#c9a227'},{id:'zephyr',name:'ZEPHYR',color:'#2bbfa0'}
+  ];
+  var STAGES = [{id:'omega', label:'OMEGA'}, {id:'battlefield', label:'BATTLEFIELD'}, {id:'specialty', label:'SPECIALTY'}];
+  var DEF = {mode:'solo', me:'ember', partner:'gale', opp1:'tide', opp2:'moth', stocks:3, stage:'omega', items:false,
+    handoffOn:false, vsPlayer:'', koMe:0, koNathan:0, names:{}, custom:[], recent:[]};
 
-  // ---------- state ----------
-  var S = {
-    code:'', status:'idle', statusMsg:'',
-    host:null, fighters:[], byId:{}, images:{}, rv:'',
-    pending:null, picker:null, search:'', outbox:[], edits:{}, undoArm:null
-  };
+  // ---------- data: this phone's copy of the cloud ----------
+  var D = {uid:'', matches:[], kv:{}};
+  var S = {sync:{phase:'loading'}, pending:null, picker:null, search:'', undoArm:null, busy:false, err:'', fighters:[], byId:{}};
 
   function load(){
     try {
       var c = JSON.parse(localStorage.getItem(STORE) || 'null');
-      if (c && typeof c === 'object'){
-        S.code = typeof c.code === 'string' ? c.code : '';
-        S.fighters = Array.isArray(c.fighters) ? c.fighters : [];
-        S.images = c.images && typeof c.images === 'object' ? c.images : {};
-        S.rv = typeof c.rv === 'string' ? c.rv : '';
-        S.outbox = Array.isArray(c.outbox) ? c.outbox : [];
-        S.host = c.host && typeof c.host === 'object' ? c.host : null;
-      }
+      if (c && Array.isArray(c.matches) && c.kv && typeof c.kv === 'object') D = {uid:c.uid || '', matches:c.matches, kv:c.kv};
     } catch(e){}
-    indexFighters();
   }
-  function save(){
-    var base = {code:S.code, fighters:S.fighters, rv:S.rv, outbox:S.outbox, host:S.host};
-    try { localStorage.setItem(STORE, JSON.stringify(Object.assign({images:S.images}, base))); }
-    catch(e){ try { localStorage.setItem(STORE, JSON.stringify(Object.assign({images:{}}, base, {rv:''}))); } catch(e2){} }
+  function save(){ try { localStorage.setItem(STORE, JSON.stringify(D)); } catch(e){} }
+  function clearData(uid){ D = {uid:uid || '', matches:[], kv:{}}; save(); }
+  function get(k){ var v = D.kv[k]; return v === undefined || v === null ? DEF[k] : v; }
+  function hasData(){ return D.matches.length > 0 || Object.keys(D.kv).length > 0; }
+
+  function indexFighters(){
+    var names = get('names') || {}, custom = Array.isArray(get('custom')) ? get('custom') : [];
+    S.fighters = ROSTER.concat(custom).filter(function(f){ return f && typeof f.id === 'string'; })
+      .map(function(f){ return {id:f.id, name:names[f.id] || f.name || '?', color:f.color}; });
+    S.byId = {};
+    S.fighters.forEach(function(f){ S.byId[f.id] = f; });
   }
-  function peerOpts(){
-    try { var o = JSON.parse(localStorage.getItem('smash.peerOpts') || 'null'); if (o && typeof o === 'object') return o; } catch(e){}
-    return {debug:0};
-  }
-  function indexFighters(){ S.byId = {}; S.fighters.forEach(function(f){ S.byId[f.id] = f; }); }
 
   // ---------- helpers ----------
   function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function nameOf(id){ var f = S.byId[id]; return f ? f.name : '—'; }
   function colorOf(id){ var f = S.byId[id]; var c = f && f.color; return /^#[0-9a-f]{3,8}$/i.test(c || '') ? c : '#17140f'; }
   function chip(id, size){
-    var img = S.images[id];
+    var img = D.kv['img:' + id];
     var ok = typeof img === 'string' && /^data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+$/.test(img);
     var st = 'width:'+size+'px;height:'+size+'px;font-size:'+Math.round(size*.42)+'px;background-color:'+colorOf(id)+';' +
       (ok ? 'background-image:url('+img+');color:transparent;' : '');
     return '<span class="chip" style="'+st+'">'+(ok ? '' : esc((nameOf(id)[0] || '?')))+'</span>';
   }
-  function cid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function dayKey(ts){ var d = new Date(ts); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+  function timeOf(ts){ return new Date(ts).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+  function matchLine(m){ return nameOf(m.me) + (m.partner ? ' + '+nameOf(m.partner) : '') + ' vs ' + nameOf(m.opp1) + (m.opp2 ? ' + '+nameOf(m.opp2) : ''); }
+  function todayMatches(){ var k = dayKey(Date.now()); return D.matches.filter(function(m){ return dayKey(m.ts) === k; }); }
+  function streak(){
+    var cur = 0, type = null;
+    for (var i = D.matches.length - 1; i >= 0; i--){
+      var r = D.matches[i].result;
+      if (type === null){ type = r; cur = 1; } else if (r === type) cur++; else break;
+    }
+    return cur ? cur + type : '';
+  }
+  function recentFor(mine){
+    var ids = [];
+    for (var i = D.matches.length - 1; i >= 0 && ids.length < 8; i--){
+      var m = D.matches[i];
+      (mine ? [m.me, m.partner] : [m.opp1, m.opp2]).forEach(function(id){ if (id && S.byId[id] && ids.indexOf(id) < 0) ids.push(id); });
+    }
+    (get('recent') || []).forEach(function(id){ if (S.byId[id] && ids.indexOf(id) < 0) ids.push(id); });
+    return ids.slice(0, 8);
+  }
   function buzz(ms){ try { if (navigator.vibrate) navigator.vibrate(ms || 20); } catch(e){} }
   var toastT = null;
   function toast(msg){
@@ -248,132 +274,140 @@
     clearTimeout(toastT);
     toastT = setTimeout(function(){ el.innerHTML = ''; }, 1600);
   }
-  function live(){ return S.status === 'live' && !!S.host; }
+  function signedIn(){ var p = S.sync.phase; return !!S.sync.uid && p !== 'signedout'; }
 
   // ---------- rendering ----------
   var rafId = 0;
   function render(){ if (!rafId) rafId = requestAnimationFrame(function(){ rafId = 0; draw(); }); }
+  function setHtml(el, html){ if (el._html !== html){ el._html = html; el.innerHTML = html; } }
 
   function statusView(){
-    var el = document.getElementById('status');
-    var map = {
-      live:['live','LIVE'], connecting:['wait','CONNECTING'], notfound:['bad','TRACKER NOT FOUND'],
-      offline:['bad','OFFLINE'], idle:['','NOT PAIRED']
-    };
-    var m = map[S.status] || map.idle;
-    el.innerHTML = '<span class="dot '+m[0]+'"></span><span>'+m[1]+'</span>';
+    var st = S.sync, p = st.phase;
+    var m = p === 'synced' ? (st.live ? ['live','LIVE'] : ['live','SYNCED'])
+      : p === 'syncing' ? ['wait','SYNCING'] : p === 'linking' ? ['wait','CONNECTING']
+      : p === 'offline' ? ['bad','OFFLINE'] : p === 'signedout' ? ['','SIGNED OUT']
+      : p === 'unconfigured' || p === 'error' ? ['bad','NOT SET UP'] : ['wait','LOADING'];
+    document.getElementById('status').innerHTML = '<span class="dot '+m[0]+'"></span><span>'+m[1]+'</span>';
     var t = document.getElementById('today');
-    if (S.host && S.host.today){
+    if (signedIn() && hasData()){
+      var today = todayMatches(), w = today.filter(function(x){ return x.result === 'W'; }).length;
       t.classList.remove('hide');
-      t.querySelector('.rec').textContent = S.host.today.w + '–' + S.host.today.l;
+      t.querySelector('.rec').textContent = w + '–' + (today.length - w);
     } else t.classList.add('hide');
   }
 
   function draw(){
+    indexFighters();
     statusView();
     var main = document.getElementById('main');
-    if (!S.code){
-      if (!document.getElementById('codeInput')){ main._html = ''; setHtml(main, pairView()); }
-      drawSheet(); return;
+    var p = S.sync.phase;
+    if (p === 'loading'){ setHtml(main, '<div class="card" style="text-align:center;padding:26px 14px"><div class="blk" style="font-size:15px">LOADING…</div></div>'); return drawSheet(); }
+    if (p === 'unconfigured' || p === 'error'){
+      setHtml(main, '<div class="card pair"><h1 class="blk">CLOUD SYNC ISN’T SET UP YET</h1><p>'+
+        esc(S.sync.msg || 'Open the tracker on your computer and follow the steps on its SYNC tab. Once it’s set up, reload this page.')+'</p>'+
+        '<button class="go blk" data-act="reload">RELOAD</button></div>');
+      return drawSheet();
     }
-    var h = S.host;
+    if (!signedIn()){
+      if (!document.getElementById('email')){ main._html = ''; setHtml(main, signInView()); }
+      var e = document.getElementById('err');
+      if (e){ e.textContent = S.err; e.classList.toggle('hide', !S.err); }
+      document.querySelectorAll('.pair button').forEach(function(b){ b.disabled = S.busy; });
+      return drawSheet();
+    }
     var out = '';
-    if (S.status !== 'live'){
-      var bad = S.status === 'notfound' || S.status === 'offline';
-      var msg = S.status === 'notfound'
-        ? 'Can\'t find the tracker. Open the <b>PHONE</b> tab on the tracker and make sure the remote is on.'
-        : S.status === 'offline' ? esc(S.statusMsg || 'No connection. Retrying…')
-        : 'Connecting to the tracker…';
-      out += '<div class="banner '+(bad ? 'bad' : 'wait')+'"><span>'+msg+'</span>'+(bad ? '<button class="blk" data-act="retry">RETRY</button>' : '')+'</div>';
+    if (p === 'offline') out += '<div class="banner bad"><span>'+esc(S.sync.msg || 'Offline. Your taps are saved on this phone.')+'</span><button class="blk" data-act="retry">RETRY</button></div>';
+    if (!hasData()){
+      setHtml(main, out + '<div class="card" style="text-align:center;padding:26px 14px"><div class="blk" style="font-size:15px">'+
+        (p === 'linking' ? 'PULLING YOUR GAMES…' : 'WAITING FOR YOUR TRACKER DATA…')+'</div><div class="empty">'+esc(S.sync.msg || '')+'</div></div>' + footView());
+      return drawSheet();
     }
-    if (S.outbox.length){
-      out += '<div class="banner wait"><span>'+S.outbox.length+' game'+(S.outbox.length > 1 ? 's' : '')+' waiting to send — they\'ll go through when the tracker reconnects.</span></div>';
-    }
-    if (!h){
-      setHtml(main, out + '<div class="card" style="text-align:center;padding:26px 14px"><div class="blk" style="font-size:15px">WAITING FOR THE TRACKER…</div><div class="empty">Code '+esc(S.code)+'</div></div>' + footView());
-      drawSheet(); return;
-    }
-    var dubs = h.mode === 'doubles';
-    var dim = live() ? '' : ' off';
-    out += '<div class="seg'+dim+'"><button class="blk'+(!dubs ? ' on' : '')+'" data-act="mode" data-v="solo">1V1</button><button class="blk'+(dubs ? ' on' : '')+'" data-act="mode" data-v="doubles">2V2</button></div>';
+    var mode = get('mode'), dubs = mode === 'doubles', handoff = !!get('handoffOn');
+    out += '<div class="seg"><button class="blk'+(!dubs ? ' on' : '')+'" data-act="mode" data-v="solo">1V1</button><button class="blk'+(dubs ? ' on' : '')+'" data-act="mode" data-v="doubles">2V2</button></div>';
 
-    var mineLbl = h.handoffOn ? 'NATHAN · LOGGING' : 'YOUR SIDE';
-    var oppLbl = h.handoffOn ? (dubs ? "COOPER'S TEAM" : "COOPER'S SIDE") : 'OPPONENT' + (dubs ? 'S' : '');
+    var mineLbl = handoff ? 'NATHAN · LOGGING' : 'YOUR SIDE';
+    var oppLbl = handoff ? (dubs ? "COOPER'S TEAM" : "COOPER'S SIDE") : 'OPPONENT' + (dubs ? 'S' : '');
     var fb = function(slot, role){
-      return '<button class="fbtn" data-act="pick" data-v="'+slot+'">'+chip(h[slot], 44)+'<span class="nm"><b>'+esc(nameOf(h[slot]))+'</b><i>'+role+'</i></span></button>';
+      var id = get(slot);
+      return '<button class="fbtn" data-act="pick" data-v="'+slot+'">'+chip(id, 44)+'<span class="nm"><b>'+esc(nameOf(id))+'</b><i>'+role+'</i></span></button>';
     };
-    out += '<div class="sides'+dim+'">' +
-      '<div class="side"><span class="lbl">'+mineLbl+'</span>' + fb('me', h.handoffOn ? 'NATHAN' : 'COOPER') + (dubs ? fb('partner', h.handoffOn ? 'PARTNER' : 'NATHAN') : '') + '</div>' +
+    out += '<div class="sides">' +
+      '<div class="side"><span class="lbl">'+mineLbl+'</span>' + fb('me', handoff ? 'NATHAN' : 'COOPER') + (dubs ? fb('partner', handoff ? 'PARTNER' : 'NATHAN') : '') + '</div>' +
       '<div class="vs blk">VS</div>' +
-      '<div class="side"><span class="lbl">'+oppLbl+'</span>' + fb('opp1', dubs ? 'OPP 1' : (h.handoffOn ? 'COOPER' : 'OPP')) + (dubs ? fb('opp2', 'OPP 2') : '') + '</div>' +
+      '<div class="side"><span class="lbl">'+oppLbl+'</span>' + fb('opp1', dubs ? 'OPP 1' : (handoff ? 'COOPER' : 'OPP')) + (dubs ? fb('opp2', 'OPP 2') : '') + '</div>' +
     '</div>';
 
     var ko = function(key, who){
-      return '<div class="ko"><span class="who">'+who+'</span><button class="blk" data-act="ko" data-k="'+key+'" data-d="-1" aria-label="minus">−</button><span class="n blk">'+(h[key] || 0)+'</span><button class="blk plus" data-act="ko" data-k="'+key+'" data-d="1" aria-label="plus">+</button></div>';
+      return '<div class="ko"><span class="who">'+who+'</span><button class="blk" data-act="ko" data-k="'+key+'" data-d="-1" aria-label="minus">−</button><span class="n blk">'+(Number(get(key)) || 0)+'</span><button class="blk plus" data-act="ko" data-k="'+key+'" data-d="1" aria-label="plus">+</button></div>';
     };
-    out += '<div class="card'+dim+'">' + ko('koMe', "COOPER'S KOs") + (dubs ? ko('koNathan', "NATHAN'S KOs") : '') + '</div>';
-
+    out += '<div class="card">' + ko('koMe', "COOPER'S KOs") + (dubs ? ko('koNathan', "NATHAN'S KOs") : '') + '</div>';
     out += '<div class="wl"><button class="big win" data-act="result" data-v="W"><b>WIN</b><i>THEN PICK STOCKS</i></button><button class="big loss" data-act="result" data-v="L"><b>LOSS</b><i>THEN PICK STOCKS</i></button></div>';
 
-    var games = h.games || [];
+    var today = todayMatches();
+    var w = today.filter(function(x){ return x.result === 'W'; }).length;
+    var diff = today.reduce(function(a, m){ return a + (m.result === 'W' ? m.margin : -m.margin); }, 0);
+    var games = today.slice(-5).reverse();
+    var last = D.matches[D.matches.length - 1];
+    var stk = streak();
     out += '<div class="card"><div class="rowhead"><span class="blk">TODAY</span><span class="aside">'+
-      (h.today ? (h.today.w + '–' + h.today.l + ' · ' + (h.today.diff > 0 ? '+' : '') + h.today.diff + ' STK' + (h.streak && games.length ? ' · ' + esc(h.streak) + ' STREAK' : '')) : '') + '</span></div>';
+      w + '–' + (today.length - w) + ' · ' + (diff > 0 ? '+' : '') + diff + ' STK' + (stk && games.length ? ' · ' + esc(stk) + ' STREAK' : '') + '</span></div>';
     if (!games.length) out += '<div class="empty">No games yet today.</div>';
     else {
       out += '<div class="games">';
       games.forEach(function(g, i){
-        var canUndo = i === 0 && g.id === h.lastId && live();
-        out += '<div class="g '+(g.result === 'W' ? 'W' : 'L')+'"><span class="b blk">'+(g.result === 'W' ? 'W' : 'L')+'</span><span class="t"><span>'+esc(g.line)+'</span><span>'+
-          esc(g.time)+' · '+esc(g.margin)+' STK'+(g.ko ? ' · '+esc(g.ko) : '')+'</span></span>'+
+        var canUndo = i === 0 && last && g.id === last.id;
+        var koTxt = (g.koMe || g.koNathan) ? ' · KO ' + (g.koMe || 0) + (g.mode === 'doubles' ? '/' + (g.koNathan || 0) : '') : '';
+        out += '<div class="g '+(g.result === 'W' ? 'W' : 'L')+'"><span class="b blk">'+(g.result === 'W' ? 'W' : 'L')+'</span><span class="t"><span>'+esc(matchLine(g))+'</span><span>'+
+          esc(timeOf(g.ts))+' · '+esc(g.margin)+' STK'+esc(koTxt)+'</span></span>'+
           (canUndo ? '<button class="undo blk'+(S.undoArm === g.id ? ' arm' : '')+'" data-act="undo" data-v="'+esc(g.id)+'">'+(S.undoArm === g.id ? 'SURE?' : 'UNDO')+'</button>' : '')+'</div>';
       });
       out += '</div>';
     }
     out += '</div>';
 
-    var stages = Array.isArray(h.stages) ? h.stages : [];
-    var stageName = (stages.filter(function(s){ return s.id === h.stage; })[0] || {}).label || '';
+    var stage = get('stage'), items = !!get('items'), stocks = Number(get('stocks')) || 3;
+    var stageName = (STAGES.filter(function(s){ return s.id === stage; })[0] || STAGES[0]).label;
     var wasOpen = !!(document.querySelector('details.set') || {}).open;
-    out += '<details class="card set'+dim+'"'+(wasOpen ? ' open' : '')+'><summary><span class="blk" style="font-size:13px;letter-spacing:.06em">MATCH SETTINGS</span><span class="lbl" style="opacity:.6">'+
-      esc(h.stocks)+' STK · '+esc(stageName)+' · '+(h.items ? 'ITEMS' : 'NO ITEMS')+'</span></summary><div class="opts">' +
-      '<div><span class="lbl">STOCKS PER PLAYER</span><div class="pills">' + [2,3,4,5,6].map(function(v){ return '<button class="'+(h.stocks === v ? 'on' : '')+'" data-act="stocks" data-v="'+v+'">'+v+'</button>'; }).join('') + '</div></div>' +
-      '<div><span class="lbl">STAGE</span><div class="pills">' + stages.map(function(s){ return '<button class="'+(h.stage === s.id ? 'on' : '')+'" data-act="stage" data-v="'+esc(s.id)+'">'+esc(s.label)+'</button>'; }).join('') + '</div></div>' +
-      '<div><span class="lbl">ITEMS</span><div class="pills"><button class="'+(!h.items ? 'on' : '')+'" data-act="items" data-v="0">NO ITEMS</button><button class="'+(h.items ? 'on' : '')+'" data-act="items" data-v="1">ITEMS ON</button></div></div>' +
+    out += '<details class="card set"'+(wasOpen ? ' open' : '')+'><summary><span class="blk" style="font-size:13px;letter-spacing:.06em">MATCH SETTINGS</span><span class="lbl" style="opacity:.6">'+
+      stocks+' STK · '+esc(stageName)+' · '+(items ? 'ITEMS' : 'NO ITEMS')+'</span></summary><div class="opts">' +
+      '<div><span class="lbl">STOCKS PER PLAYER</span><div class="pills">' + [2,3,4,5,6].map(function(v){ return '<button class="'+(stocks === v ? 'on' : '')+'" data-act="stocks" data-v="'+v+'">'+v+'</button>'; }).join('') + '</div></div>' +
+      '<div><span class="lbl">STAGE</span><div class="pills">' + STAGES.map(function(s){ return '<button class="'+(stage === s.id ? 'on' : '')+'" data-act="stage" data-v="'+s.id+'">'+s.label+'</button>'; }).join('') + '</div></div>' +
+      '<div><span class="lbl">ITEMS</span><div class="pills"><button class="'+(!items ? 'on' : '')+'" data-act="items" data-v="0">NO ITEMS</button><button class="'+(items ? 'on' : '')+'" data-act="items" data-v="1">ITEMS ON</button></div></div>' +
       '</div></details>';
 
     out += footView();
     setHtml(main, out);
     drawSheet();
   }
-  function setHtml(el, html){ if (el._html !== html){ el._html = html; el.innerHTML = html; } }
 
   function footView(){
-    return '<div class="foot"><span>CODE '+esc(S.code)+'</span>·<button data-act="unpair">CHANGE</button></div>';
+    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button></div>';
   }
-
-  function pairView(){
+  function signInView(){
     return '<div class="card pair">' +
-      '<h1 class="blk">PAIR WITH THE TRACKER</h1>' +
-      '<p>On the tracker, open the <b>PHONE</b> tab and turn the remote on. Scan its square code with your camera, or type the 5-letter code here.</p>' +
-      '<input id="codeInput" maxlength="5" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="CODE" inputmode="text">' +
-      '<button class="go blk" data-act="pair">CONNECT</button>' +
+      '<h1 class="blk">SIGN IN</h1>' +
+      '<p>Use the same email and password you signed in with on the tracker’s <b>SYNC</b> tab.</p>' +
+      '<input id="email" type="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Email">' +
+      '<input id="password" type="password" autocomplete="current-password" placeholder="Password">' +
+      '<div id="err" class="err hide"></div>' +
+      '<button class="go blk" data-act="signin">SIGN IN</button>' +
+      '<button class="alt blk" data-act="signup">CREATE ACCOUNT</button>' +
     '</div>';
   }
 
   function drawSheet(){
     var el = document.getElementById('sheet');
-    var h = S.host;
-    if (!S.pending || !h){ setHtml(el, ''); return; }
-    var dubs = h.mode === 'doubles';
-    var max = Math.max(1, Math.min(12, (h.stocks || 3) * (dubs ? 2 : 1)));
+    if (!S.pending || !signedIn()){ setHtml(el, ''); return; }
+    var dubs = get('mode') === 'doubles';
+    var max = Math.max(1, Math.min(12, (Number(get('stocks')) || 3) * (dubs ? 2 : 1)));
     var q = dubs
       ? (S.pending === 'W' ? 'WON WITH HOW MANY TEAM STOCKS LEFT?' : 'LOST — HOW MANY TEAM STOCKS DID THEY HAVE LEFT?')
       : (S.pending === 'W' ? 'WON WITH HOW MANY STOCKS LEFT?' : 'LOST — HOW MANY STOCKS DID THEY HAVE LEFT?');
     var btns = '';
     for (var v = 1; v <= max; v++) btns += '<button data-act="stock" data-v="'+v+'">'+v+'<i>STK</i></button>';
-    var kos = '<span>COOPER '+(h.koMe || 0)+' KO</span>' + (dubs ? '<span>NATHAN '+(h.koNathan || 0)+' KO</span>' : '');
+    var kos = '<span>COOPER '+(Number(get('koMe')) || 0)+' KO</span>' + (dubs ? '<span>NATHAN '+(Number(get('koNathan')) || 0)+' KO</span>' : '');
     setHtml(el, '<div class="scrim" data-act="cancel"><div class="sheet '+S.pending+'" data-stop="1">' +
-      '<div class="sub">'+(S.pending === 'W' ? 'WIN' : 'LOSS')+' · '+esc(nameOf(h.me))+(dubs ? ' + '+esc(nameOf(h.partner)) : '')+' VS '+esc(nameOf(h.opp1))+(dubs ? ' + '+esc(nameOf(h.opp2)) : '')+'</div>' +
+      '<div class="sub">'+(S.pending === 'W' ? 'WIN' : 'LOSS')+' · '+esc(nameOf(get('me')))+(dubs ? ' + '+esc(nameOf(get('partner'))) : '')+' VS '+esc(nameOf(get('opp1')))+(dubs ? ' + '+esc(nameOf(get('opp2'))) : '')+'</div>' +
       '<div class="q blk">'+q+'</div>' +
       '<div class="stk">'+btns+'</div>' +
       '<div class="kos">'+kos+'</div>' +
@@ -385,9 +419,8 @@
   var SLOT_TITLE = {me:"PICK COOPER'S FIGHTER", partner:"PICK NATHAN'S FIGHTER", opp1:'PICK OPPONENT FIGHTER', opp2:'PICK OPPONENT FIGHTER'};
   function openPicker(slot){
     S.picker = slot; S.search = '';
-    var h = S.host;
     var title = SLOT_TITLE[slot];
-    if (h && h.handoffOn) title = slot === 'me' ? "PICK NATHAN'S FIGHTER" : slot === 'partner' ? "PICK PARTNER'S FIGHTER" : slot === 'opp1' && h.mode !== 'doubles' ? "PICK COOPER'S FIGHTER" : title;
+    if (get('handoffOn')) title = slot === 'me' ? "PICK NATHAN'S FIGHTER" : slot === 'partner' ? "PICK PARTNER'S FIGHTER" : slot === 'opp1' && get('mode') !== 'doubles' ? "PICK COOPER'S FIGHTER" : title;
     document.getElementById('pickerTitle').textContent = title;
     document.getElementById('search').value = '';
     document.getElementById('picker').classList.remove('hide');
@@ -402,97 +435,114 @@
   }
   function drawPicker(){
     if (!S.picker) return;
-    var h = S.host || {};
-    var cur = h[S.picker];
+    indexFighters();
+    var cur = get(S.picker);
     var q = S.search.trim().toLowerCase();
     var match = function(id){ return !q || nameOf(id).toLowerCase().indexOf(q) > -1; };
     var tile = function(id){ return '<button class="tile'+(id === cur ? ' on' : '')+'" data-act="choose" data-v="'+esc(id)+'">'+chip(id, 48)+'<b>'+esc(nameOf(id))+'</b></button>'; };
-    var mine = S.picker === 'me' || S.picker === 'partner';
-    var recent = ((mine ? h.recentMine : h.recentOpp) || []).filter(function(id){ return S.byId[id] && match(id); });
+    var recent = recentFor(S.picker === 'me' || S.picker === 'partner').filter(match);
     var all = S.fighters.map(function(f){ return f.id; }).filter(match);
     var out = '';
     if (recent.length) out += '<div><span class="lbl">RECENT</span><div class="recent">'+recent.map(tile).join('')+'</div></div>';
     out += '<div><span class="lbl">'+(q ? all.length + ' MATCH' + (all.length === 1 ? '' : 'ES') : 'ALL FIGHTERS · ' + all.length)+'</span>' +
       (all.length ? '<div class="grid">'+all.map(tile).join('')+'</div>' : '<div class="empty">No fighters match.</div>') + '</div>';
-    document.getElementById('pickerBody').innerHTML = out;
+    setHtml(document.getElementById('pickerBody'), out);
   }
 
   // ---------- actions ----------
-  function localEdit(patch){
-    if (!S.host) return;
-    var now = Date.now();
-    Object.keys(patch).forEach(function(k){ S.host[k] = patch[k]; S.edits[k] = now; });
-    render();
-  }
-  function send(msg){
-    if (conn && conn.open){ try { conn.send(msg); return true; } catch(e){} }
-    return false;
-  }
-  function needLive(){
-    if (live()) return true;
-    toast('NOT CONNECTED YET');
-    return false;
-  }
-  function flushOutbox(){ S.outbox.forEach(function(m){ send(m); }); }
+  function changed(){ save(); if (sync) sync.notify(); render(); }
+  function setKv(patch){ D.kv = Object.assign({}, D.kv, patch); changed(); }
 
+  function logGame(result, margin){
+    var mode = get('mode'), dubs = mode === 'doubles', swap = !!get('handoffOn');
+    var me = get('me'), partner = get('partner'), opp1 = get('opp1'), opp2 = get('opp2');
+    var now = Date.now();
+    var last = D.matches[D.matches.length - 1];
+    var id = last && last.id >= now ? last.id + 1 : now;
+    var m = {
+      id:id, ts:now,
+      result: swap ? (result === 'W' ? 'L' : 'W') : result,
+      margin:margin, mode:mode,
+      me: swap ? opp1 : me,
+      partner: dubs ? (swap ? opp2 : partner) : null,
+      opp1: swap ? me : opp1,
+      opp2: dubs ? (swap ? partner : opp2) : null,
+      vs: get('vsPlayer') || '',
+      stage: get('stage') || 'omega',
+      items: !!get('items'),
+      koMe: Number(get('koMe')) || 0,
+      koNathan: Number(get('koNathan')) || 0
+    };
+    D.matches = D.matches.concat([m]);
+    D.kv = Object.assign({}, D.kv, {koMe:0, koNathan:0});
+    changed();
+    return m;
+  }
+
+  var sync = null;
   var handlers = {
-    pair: function(){
-      var v = (document.getElementById('codeInput').value || '').trim().toUpperCase();
-      if (!CODE_RE.test(v)) return toast('CODE IS 5 LETTERS');
-      setCode(v);
-    },
-    unpair: function(){
-      if (S.outbox.length && !confirm('Some games haven\'t reached the tracker yet. Forget them and change code?')) return;
-      S.code = ''; S.host = null; S.outbox = []; S.pending = null; save();
-      try { history.replaceState(null, '', location.pathname + location.search); } catch(e){}
-      disconnect(); setStatus('idle');
-    },
-    retry: function(){ disconnect(); connect(); },
-    mode: function(el){ if (!needLive()) return; localEdit({mode:el.dataset.v}); send({t:'mode', mode:el.dataset.v}); buzz(); },
-    pick: function(el){ if (!needLive()) return; openPicker(el.dataset.v); },
+    reload: function(){ location.reload(); },
+    signin: function(){ auth(false); },
+    signup: function(){ auth(true); },
+    signout: function(){ if (sync) sync.signOut(); clearData(); S.pending = null; render(); },
+    retry: function(){ if (sync) sync.refresh(); },
+    mode: function(el){ setKv({mode:el.dataset.v}); buzz(); },
+    pick: function(el){ openPicker(el.dataset.v); },
     closePicker: closePicker,
     choose: function(el){
       var slot = S.picker, id = el.dataset.v;
       closePicker();
       if (!slot || !S.byId[id]) return;
-      var p = {}; p[slot] = id; localEdit(p);
-      send({t:'pick', slot:slot, id:id}); buzz();
+      var p = {}; p[slot] = id;
+      p.recent = [id].concat((get('recent') || []).filter(function(x){ return x !== id; })).slice(0, 8);
+      setKv(p); buzz();
     },
     ko: function(el){
-      if (!needLive()) return;
-      var k = el.dataset.k, v = Math.max(0, Math.min(99, (S.host[k] || 0) + Number(el.dataset.d)));
-      var p = {}; p[k] = v; localEdit(p);
-      send({t:'ko', key:k, v:v}); buzz(15);
+      var k = el.dataset.k, v = Math.max(0, Math.min(99, (Number(get(k)) || 0) + Number(el.dataset.d)));
+      var p = {}; p[k] = v; setKv(p); buzz(15);
     },
-    result: function(el){
-      if (!S.host) return toast('NOT CONNECTED YET');
-      S.pending = el.dataset.v; buzz(); drawSheet();
-    },
+    result: function(el){ S.pending = el.dataset.v; buzz(); drawSheet(); },
     cancel: function(){ S.pending = null; drawSheet(); },
     stock: function(el){
-      var h = S.host, result = S.pending;
-      if (!h || !result) return;
-      var dubs = h.mode === 'doubles';
-      var msg = {t:'log', cid:cid(), result:result, margin:Number(el.dataset.v) || 0, mode:h.mode,
-        me:h.me, partner:dubs ? h.partner : null, opp1:h.opp1, opp2:dubs ? h.opp2 : null,
-        koMe:h.koMe || 0, koNathan:dubs ? (h.koNathan || 0) : 0};
-      S.outbox.push(msg); save();
-      var sent = send(msg);
+      var result = S.pending;
+      if (!result) return;
       S.pending = null;
-      localEdit({koMe:0, koNathan:0});
+      logGame(result, Number(el.dataset.v) || 0);
       buzz([30, 40, 30]);
-      toast((result === 'W' ? 'WIN' : 'LOSS') + (sent ? ' SENT' : ' SAVED — WILL SEND'));
+      toast((result === 'W' ? 'WIN' : 'LOSS') + ' LOGGED' + (S.sync.phase === 'offline' ? ' — WILL SYNC' : ''));
     },
     undo: function(el){
       var id = Number(el.dataset.v);
       if (S.undoArm !== id){ S.undoArm = id; render(); setTimeout(function(){ if (S.undoArm === id){ S.undoArm = null; render(); } }, 3000); return; }
       S.undoArm = null;
-      if (send({t:'undo', id:id})) { buzz(); toast('UNDONE'); } else toast('NOT CONNECTED');
+      D.matches = D.matches.filter(function(m){ return m.id !== id; });
+      changed(); buzz(); toast('UNDONE');
     },
-    stocks: function(el){ if (!needLive()) return; var v = Number(el.dataset.v); localEdit({stocks:v}); send({t:'stocks', v:v}); },
-    stage: function(el){ if (!needLive()) return; localEdit({stage:el.dataset.v}); send({t:'stage', id:el.dataset.v}); },
-    items: function(el){ if (!needLive()) return; var v = el.dataset.v === '1'; localEdit({items:v}); send({t:'items', v:v}); }
+    stocks: function(el){ setKv({stocks:Number(el.dataset.v)}); },
+    stage: function(el){ setKv({stage:el.dataset.v}); },
+    items: function(el){ setKv({items:el.dataset.v === '1'}); }
   };
+
+  function auth(create){
+    if (!sync || S.busy) return;
+    var email = (document.getElementById('email').value || '').trim();
+    var pw = document.getElementById('password').value || '';
+    if (!/^\S+@\S+\.\S+$/.test(email) || pw.length < 6){ S.err = 'Enter your email and a password of at least 6 characters.'; return render(); }
+    S.busy = true; S.err = ''; render();
+    (create ? sync.signUp(email, pw) : sync.signIn(email, pw)).then(function(r){
+      S.busy = false;
+      if (create && r && r.needsConfirm) S.err = 'Account made. Check your email for the confirmation link, then sign in.';
+      render();
+    }).catch(function(e){
+      var m = (e && e.message) || '';
+      S.busy = false;
+      S.err = /invalid login/i.test(m) ? 'Wrong email or password.' :
+        /already registered|already exists/i.test(m) ? 'That email already has an account — tap SIGN IN.' :
+        /not confirmed/i.test(m) ? 'Confirm your email first (check your inbox), then sign in.' :
+        /fetch|network/i.test(m) ? 'Can’t reach the cloud. Check your internet.' : (m || 'Sign-in failed.');
+      render();
+    });
+  }
 
   document.addEventListener('click', function(e){
     var el = e.target.closest('[data-act]');
@@ -502,142 +552,47 @@
     if (fn){ e.preventDefault(); fn(el); }
   });
   document.addEventListener('keydown', function(e){
-    if (e.key === 'Enter' && e.target && e.target.id === 'codeInput') handlers.pair();
+    if (e.key === 'Enter' && e.target && (e.target.id === 'email' || e.target.id === 'password')) auth(false);
     if (e.key === 'Escape'){ if (S.picker) closePicker(); else if (S.pending){ S.pending = null; drawSheet(); } }
   });
   document.getElementById('search').addEventListener('input', function(e){ S.search = e.target.value || ''; drawPicker(); });
 
-  // ---------- incoming ----------
-  function onData(d){
-    if (!d || typeof d !== 'object') return;
-    switch (d.t){
-      case 'pong': return;
-      case 'roster':
-        if (!Array.isArray(d.fighters)) return;
-        S.fighters = d.fighters.filter(function(f){ return f && typeof f.id === 'string'; });
-        indexFighters();
-        if (d.fresh){ S.images = {}; S.rv = ''; }
-        render(); if (S.picker) drawPicker();
-        return;
-      case 'img':
-        if (typeof d.id === 'string' && typeof d.src === 'string') S.images[d.id] = d.src;
-        render();
-        return;
-      case 'rosterdone':
-        S.rv = String(d.rv || ''); save(); render(); if (S.picker) drawPicker();
-        return;
-      case 'state': {
-        var now = Date.now(), prev = S.host || {};
-        var next = Object.assign({}, d);
-        delete next.t;
-        Object.keys(S.edits).forEach(function(k){
-          if (now - S.edits[k] < 900) next[k] = prev[k]; else delete S.edits[k];
-        });
-        S.host = next;
-        save(); render();
-        return;
-      }
-      case 'ack': {
-        var n = S.outbox.length;
-        S.outbox = S.outbox.filter(function(m){ return m.cid !== d.cid; });
-        if (S.outbox.length !== n){ save(); render(); }
-        return;
-      }
-    }
-  }
-
-  // ---------- connection ----------
-  var peer = null, conn = null, retryT = null, openT = null, lastMsg = 0;
-
-  function setStatus(st, msg){
-    S.status = st; S.statusMsg = msg || '';
-    if (st !== 'live' && S.pending && !S.host) S.pending = null;
-    render();
-  }
-  function setCode(code){
-    S.code = code; S.host = null; save();
-    try { history.replaceState(null, '', '#' + code); } catch(e){ location.hash = code; }
-    disconnect(); connect();
-  }
-  function retry(ms){ clearTimeout(retryT); retryT = setTimeout(connect, ms); }
-  function dropConn(){
-    var c = conn; conn = null; clearTimeout(openT);
-    if (c){ try { c.close(); } catch(e){} }
-  }
-  function disconnect(){
-    clearTimeout(retryT); dropConn();
-    var p = peer; peer = null;
-    if (p){ try { p.destroy(); } catch(e){} }
-  }
-  function connect(){
-    clearTimeout(retryT);
-    if (!S.code) return;
-    if (conn && conn.open) return;
-    if (typeof window.Peer !== 'function'){ setStatus('offline', 'Could not load the connection library — check your internet, then tap RETRY.'); return; }
-    if (S.status !== 'notfound') setStatus('connecting');
-    if (!peer || peer.destroyed){
-      var p = peer = new window.Peer(peerOpts());
-      p.on('open', function(){ if (peer === p) dial(); });
-      p.on('disconnected', function(){
-        if (peer !== p || p.destroyed) return;
-        setTimeout(function(){ if (peer === p && !p.destroyed && p.disconnected){ try { p.reconnect(); } catch(e){ disconnect(); retry(1500); } } }, 1000);
-      });
-      p.on('error', function(err){
-        if (peer !== p) return;
-        var type = err && err.type;
-        if (type === 'peer-unavailable'){ dropConn(); setStatus('notfound'); retry(3000); return; }
-        if (type === 'browser-incompatible'){ setStatus('offline', 'This browser can\'t connect to the tracker.'); return; }
-        disconnect();
-        setStatus(navigator.onLine === false ? 'offline' : 'connecting', navigator.onLine === false ? 'No internet on this phone.' : '');
-        retry(3000);
-      });
-    } else if (peer.open) dial();
-    else if (peer.disconnected){ try { peer.reconnect(); } catch(e){ disconnect(); retry(1000); } }
-  }
-  function dial(){
-    if (conn && (conn.open || conn._dialing)) return;
-    var c = conn = peer.connect(PREFIX + S.code, {reliable:true});
-    c._dialing = true;
-    clearTimeout(openT);
-    openT = setTimeout(function(){ if (conn === c && !c.open){ dropConn(); retry(300); } }, 10000);
-    c.on('open', function(){
-      if (conn !== c) return;
-      c._dialing = false; clearTimeout(openT);
-      lastMsg = Date.now();
-      setStatus('live');
-      c.send({t:'hello', rv:S.rv});
-      flushOutbox();
-    });
-    c.on('data', function(d){ if (conn === c){ lastMsg = Date.now(); onData(d); } });
-    c.on('close', function(){ if (conn === c){ conn = null; clearTimeout(openT); if (S.status === 'live') setStatus('connecting'); retry(800); } });
-    c.on('error', function(){ if (conn === c){ dropConn(); retry(1500); } });
-  }
-  function heartbeat(){
-    if (!S.code) return;
-    if (conn && conn.open){
-      if (Date.now() - lastMsg > 12000){ dropConn(); setStatus('connecting'); connect(); return; }
-      send({t:'ping'});
-    } else if (!conn) connect();
-  }
-  setInterval(heartbeat, 4000);
-  document.addEventListener('visibilitychange', function(){
-    if (document.visibilityState !== 'visible' || !S.code) return;
-    if (conn && conn.open && Date.now() - lastMsg < 9000) return send({t:'ping'});
-    dropConn(); connect();
-  });
-  window.addEventListener('online', function(){ if (S.code){ disconnect(); connect(); } });
-
   // ---------- boot ----------
   load();
-  var fromHash = (location.hash || '').replace('#', '').trim().toUpperCase();
-  if (CODE_RE.test(fromHash) && fromHash !== S.code){ S.code = fromHash; S.host = null; S.outbox = []; save(); }
-  else if (S.code && !fromHash){ try { history.replaceState(null, '', '#' + S.code); } catch(e){} }
-  window.addEventListener('hashchange', function(){
-    var v = (location.hash || '').replace('#', '').trim().toUpperCase();
-    if (CODE_RE.test(v) && v !== S.code) setCode(v);
-  });
   draw();
-  if (S.code) connect();
+  if (typeof window.SmashSync !== 'function'){
+    S.sync = {phase:'error', msg:'Could not load the sync code. Check your internet, then reload.'};
+    draw();
+    return;
+  }
+  sync = new window.SmashSync({
+    firstLink:'cloud', baseKey:'smashremote.base',
+    adapter:{
+      getLocal: function(){ return {matches:D.matches, kv:D.kv}; },
+      applyRemote: function(ch){
+        var kv = Object.assign({}, D.kv);
+        Object.keys(ch.kv || {}).forEach(function(k){ if (ch.kv[k] == null) delete kv[k]; else kv[k] = ch.kv[k]; });
+        D.kv = kv;
+        if ((ch.upserts || []).length || (ch.deletes || []).length){
+          var byId = {};
+          D.matches.forEach(function(m){ byId[m.id] = m; });
+          (ch.deletes || []).forEach(function(id){ delete byId[id]; });
+          (ch.upserts || []).forEach(function(m){ if (m && m.id != null) byId[m.id] = m; });
+          D.matches = Object.keys(byId).map(function(k){ return byId[k]; }).sort(function(a, b){ return (a.ts - b.ts) || (a.id - b.id); });
+        }
+        save(); render();
+        if (S.picker) drawPicker();
+      }
+    },
+    onStatus: function(st){
+      var wasIn = signedIn();
+      S.sync = st;
+      if (wasIn && !signedIn()){ clearData(); S.pending = null; if (S.picker) closePicker(); }
+      if (st.uid && D.uid !== st.uid) clearData(st.uid);
+      render();
+    }
+  });
+  sync.start();
 })();
 </script>
 </body>
