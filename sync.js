@@ -87,13 +87,37 @@
   function manualConfig(){
     try { var c = JSON.parse(localStorage.getItem('smash.syncConfig') || 'null'); return validConfig(c) ? c : null; } catch(e){ return null; }
   }
+  // The tracker's phone QR code carries its connection details as #cfg=<base64 JSON>, so a phone
+  // is set up by scanning it even if this site's /api/sync-config has no keys.
+  function configFromHash(){
+    var m = /[#&]cfg=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    if (!m) return null;
+    var c = null;
+    try { c = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))); } catch(e){}
+    // Left in the address on purpose: an iPhone home-screen icon keeps only the URL, not this page's storage.
+    if (!validConfig(c)) return null;
+    c = {url:c.url.replace(/\/+$/, ''), key:c.key};
+    try { localStorage.setItem('smash.syncConfig', JSON.stringify(c)); } catch(e){}
+    return c;
+  }
+  function encodeConfig(c){
+    return btoa(JSON.stringify({url:c.url, key:c.key})).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  // Resolves to {cfg} or {cfg:null, why:'…'} so the page can say what's missing.
   function loadConfig(){
+    var fromHash = configFromHash();
+    if (fromHash) return Promise.resolve({cfg:fromHash});
     var manual = manualConfig();
-    if (manual) return Promise.resolve(manual);
-    return fetch('api/sync-config', {cache:'no-store'})
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(c){ return validConfig(c) ? {url:c.url.replace(/\/+$/, ''), key:c.key} : null; })
-      .catch(function(){ return null; });
+    if (manual) return Promise.resolve({cfg:manual});
+    return fetch('api/sync-config?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){
+        if (!r.ok) return {cfg:null, why:'This site\u2019s /api/sync-config answered HTTP ' + r.status + '.'};
+        return r.json().then(function(c){
+          return validConfig(c) ? {cfg:{url:c.url.replace(/\/+$/, ''), key:c.key}}
+            : {cfg:null, why:'This site has no Supabase keys yet (/api/sync-config is empty).'};
+        });
+      })
+      .catch(function(){ return {cfg:null, why:'Couldn\u2019t reach this site\u2019s /api/sync-config.'}; });
   }
 
   // ---------- Supabase backend ----------
@@ -181,8 +205,11 @@
 
   P.start = function(){
     var self = this;
-    return loadConfig().then(function(cfg){
-      if (!cfg) return self.status({phase:'unconfigured'});
+    return loadConfig().then(function(res){
+      var cfg = res.cfg;
+      if (!cfg) return self.status({phase:'unconfigured', msg:res.why || ''});
+      self.config = cfg;
+      self.configCode = encodeConfig(cfg);
       var factory = window.__smashSyncBackend;
       var ready = factory || (window.supabase && window.supabase.createClient) ? Promise.resolve() : loadScript(SUPABASE_SRC);
       return ready.then(function(){

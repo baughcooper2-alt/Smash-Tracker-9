@@ -303,8 +303,9 @@
     var p = S.sync.phase;
     if (p === 'loading'){ setHtml(main, '<div class="card" style="text-align:center;padding:26px 14px"><div class="blk" style="font-size:15px">LOADING…</div></div>'); return drawSheet(); }
     if (p === 'unconfigured' || p === 'error'){
-      setHtml(main, '<div class="card pair"><h1 class="blk">CLOUD SYNC ISN’T SET UP YET</h1><p>'+
-        esc(S.sync.msg || 'Open the tracker on your computer and follow the steps on its SYNC tab. Once it’s set up, reload this page.')+'</p>'+
+      setHtml(main, '<div class="card pair"><h1 class="blk">CLOUD SYNC ISN\u2019T SET UP ON THIS PHONE</h1>'+
+        (S.sync.msg ? '<p>'+esc(S.sync.msg)+'</p>' : '')+
+        '<p>Fix: on the tracker (the computer where it says SYNCED), open the <b>SYNC</b> tab and scan its square code with this phone\u2019s camera. The code brings the cloud settings with it.</p>'+
         '<button class="go blk" data-act="reload">RELOAD</button></div>');
       return drawSheet();
     }
@@ -558,6 +559,8 @@
   document.getElementById('search').addEventListener('input', function(e){ S.search = e.target.value || ''; drawPicker(); });
 
   // ---------- boot ----------
+  // Opening the tracker's QR link while this page is already open only changes the #, so reload to pick it up.
+  window.addEventListener('hashchange', function(){ if (/[#&]cfg=/.test(location.hash)) location.reload(); });
   load();
   draw();
   if (typeof window.SmashSync !== 'function'){
