@@ -1,4 +1,4 @@
-const CACHE = 'smash-tracker-v7';
+const CACHE = 'smash-tracker-v8';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './roster-seed.json',
   './remote.html', './sync.js', './vendor/supabase.js', './vendor/qrcode.js'];
 
