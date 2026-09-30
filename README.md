@@ -10,6 +10,8 @@ A win/loss tracker for solo and doubles matches, built as an installable Progres
 - [support.js](support.js) — generated runtime support code; do not edit by hand (see the file header for the rebuild command)
 - [roster-seed.json](roster-seed.json) — seed/exported match and roster data
 - [icon-192.png](icon-192.png) — app icon
+- [remote.html](remote.html) — phone remote: a simplified controller that logs games into the tracker in real time
+- [vendor/](vendor/) — third-party libraries for the phone remote (PeerJS for the peer-to-peer link, qrcode-generator for the pairing QR code)
 
 ## Running locally
 
@@ -24,3 +26,9 @@ Then visit `http://localhost:8000`.
 ## Installing as a PWA
 
 Once served over `http`/`https`, most browsers will offer an "Install" or "Add to Home Screen" option, using the icon and metadata from [manifest.webmanifest](manifest.webmanifest).
+
+## Phone remote
+
+Open the **PHONE** tab in the tracker and turn the remote on. Scan the QR code with your phone (or open `remote.html` and type the 5-letter code). The phone becomes a stripped-down controller: pick fighters, count KOs, tap WIN/LOSS, pick stocks. Each action shows up on the tracker instantly.
+
+The phone connects straight to the tracker over WebRTC (PeerJS's free public pairing server helps the two devices find each other). The tracker stays the only place games are saved, so it has to be open while you play. Games logged while the connection drops are queued on the phone and sent once it reconnects.
