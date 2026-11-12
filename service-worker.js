@@ -1,6 +1,6 @@
-const CACHE = 'smash-tracker-v9';
+const CACHE = 'smash-tracker-v10';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './roster-seed.json',
-  './remote.html', './sync.js', './vendor/supabase.js', './vendor/qrcode.js'];
+  './remote.html', './sync.js', './fx.js', './vendor/supabase.js', './vendor/qrcode.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
