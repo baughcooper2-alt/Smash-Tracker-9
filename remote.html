@@ -415,7 +415,7 @@
   function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function snowOn(){ try { return localStorage.getItem('stocklog.snow') !== 'off'; } catch(e){ return true; } }
   function footView(){
-    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="sound">'+(soundOn() ? 'MUTE' : 'SOUND ON')+'</button></div>';
+    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="sound">'+(soundOn() ? 'MUTE' : 'SOUND ON')+'</button>·<a href="sounds/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">CREDITS</a></div>';
   }
   function signInView(){
     return '<div class="card pair">' +

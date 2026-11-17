@@ -11,6 +11,7 @@ A win/loss tracker for solo and doubles matches, built as an installable Progres
 - [roster-seed.json](roster-seed.json) — seed/exported match and roster data
 - [icon-192.png](icon-192.png) — app icon
 - [remote.html](remote.html) — phone remote: a simplified controller that logs games straight into the synced data
+- [sounds/](sounds/) — recorded sound effects (CC0 / CC BY / CC BY-SA, see [sounds/CREDITS.txt](sounds/CREDITS.txt))
 - [fx.js](fx.js) — win / loss / six-stock animations and the snow, shared by the tracker and the phone remote
 - [sync.js](sync.js) — cloud sync engine shared by the tracker and the phone remote
 - [api/sync-config.js](api/sync-config.js) — Vercel function that hands the browser the Supabase URL and public key
@@ -41,5 +42,5 @@ One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without 
 
 - Keys **1**–**7** switch tabs. **W** or **L** starts logging a win or loss. Then a number picks the stocks (**0** skips) and **Esc** cancels.
 - Logging a game plays an animation: confetti for a win, a shake for a loss, and a bigger gold celebration for a flawless win (a six-stock in 3-stock 2v2, a three-stock in 1v1). Flawless games are gold in the match log and counted as **SIX-STOCKS** on Home and Stats.
-- Each result has a sound: a bright arpeggio and sleigh bells for a win, a dark distorted low hit with a sinking drone and a heartbeat for a loss, and a cinematic brass victory with timpani, choir and glockenspiel for a six-stock. Tabs, buttons, KO counters, the fighter picker and random rolls have short, quiet interface sounds too. The **🔊 SOUND** button in the header (or **MUTE** at the bottom of the phone remote) turns all of it off. On iPhone, the ring/silent switch also mutes them.
+- Each result has a sound, picked at random from real recordings so it doesn't get old: a win jingle with an announcer ("You win!", "Winner!", "Victory!", "MVP!"); for a six-stock, a cinematic fanfare with a crowd going wild and "EPIC WIN!"; for a loss, either a doom hit with a grim announcer ("Pathetic.", "You died.", "Disappointing."), a sad sting with a heckle ("How embarrassing.", "What a beating.", "Weak sauce."), or the device's own voice saying "You suck, bro." Tabs, buttons, KO counters, the fighter picker and random rolls have short, quiet interface sounds too. The **🔊 SOUND** button in the header (or **MUTE** at the bottom of the phone remote) turns all of it off. On iPhone, the ring/silent switch also mutes them. Sound credits and licenses are in [sounds/CREDITS.txt](sounds/CREDITS.txt).
 - The snow can be turned off with the **SNOW** button in the header (or **SNOW OFF** at the bottom of the phone remote).
