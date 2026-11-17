@@ -402,9 +402,10 @@
     drawSheet();
   }
 
+  function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function snowOn(){ try { return localStorage.getItem('stocklog.snow') !== 'off'; } catch(e){ return true; } }
   function footView(){
-    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button></div>';
+    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="sound">'+(soundOn() ? 'MUTE' : 'SOUND ON')+'</button></div>';
   }
   function signInView(){
     return '<div class="card pair">' +
@@ -511,6 +512,7 @@
     reload: function(){ location.reload(); },
     signin: function(){ auth(false); },
     signup: function(){ auth(true); },
+    sound: function(){ var on = !soundOn(); if (window.SmashFX) window.SmashFX.setSound(on); else { try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){} } toast(on ? 'SOUND ON' : 'SOUND OFF'); render(); },
     snow: function(){ var on = !snowOn(); try { localStorage.setItem('stocklog.snow', on ? 'on' : 'off'); } catch(e){} if (window.SmashFX) window.SmashFX.snow(on); render(); },
     signout: function(){ if (sync) sync.signOut(); clearData(); S.pending = null; render(); },
     retry: function(){ if (sync) sync.refresh(); },

@@ -1,6 +1,8 @@
 // Smash Tracker effects, shared by the tracker (index.html) and the phone remote (remote.html):
 //   SmashFX.result({kind:'win'|'loss'|'perfect', title, sub})  full-screen result animation
 //   SmashFX.snow(on)                                             falling snow behind everything clickable
+//   SmashFX.soundOn() / SmashFX.setSound(on)                     sound effects on or off (saved per device)
+// Sounds are synthesized with Web Audio: no audio files to load.
 (function(){
   'use strict';
   if (window.SmashFX) return;
@@ -138,6 +140,8 @@
 
   function result(o){
     o = o || {};
+    var snd = o.kind === 'perfect' || o.kind === 'loss' ? o.kind : 'win';
+    if (o.sound !== false) play(snd);
     if (reduced() || !document.body) return;
     ensureCss();
     clear();
@@ -166,6 +170,151 @@
     var total = kind === 'perfect' ? 3400 : kind === 'loss' ? 1600 : 1700;
     timers.push(setTimeout(clear, total));
     try { if (navigator.vibrate) navigator.vibrate(kind === 'perfect' ? [40, 60, 40, 60, 120] : kind === 'loss' ? [160] : [30, 40, 30]); } catch(e){}
+  }
+
+
+  // ---------- sound ----------
+  var actx = null, master = null, noiseBuf = null;
+  function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
+  function audio(){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!actx){
+      try { actx = new AC(); } catch(e){ return null; }
+      master = out(actx, actx.destination);
+    }
+    if (actx.state === 'suspended'){ try { actx.resume(); } catch(e){} }
+    return actx;
+  }
+  // Master chain: gentle level plus a compressor so stacked notes never clip.
+  function out(c, dest){
+    var comp = c.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .2;
+    var g = c.createGain(); g.gain.value = 1.1;
+    g.connect(comp); comp.connect(dest);
+    return g;
+  }
+  // Browsers only start audio after a tap or key press. Unlock on the first one, so a game that
+  // arrives from the phone later can still play its sound on the tracker.
+  ['pointerdown', 'keydown', 'touchend'].forEach(function(ev){
+    window.addEventListener(ev, function(){ if (soundOn() && (!actx || actx.state !== 'running')) audio(); }, {passive:true, capture:true});
+  });
+  function setSound(on){
+    try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){}
+    if (on && audio()) build('tick', actx, master, actx.currentTime + .02);
+  }
+  function play(kind){
+    if (!soundOn() || !audio()) return;
+    try { build(kind, actx, master, actx.currentTime + .03); } catch(e){}
+  }
+
+  var midi = function(n){ return 440 * Math.pow(2, (n - 69) / 12); };
+  function tone(c, dest, t, freq, dur, o){
+    o = o || {};
+    var osc = c.createOscillator(), g = c.createGain(), node = osc;
+    osc.type = o.type || 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(o.slideTo, t + dur);
+    if (o.detune) osc.detune.value = o.detune;
+    if (o.vibrato){
+      var lfo = c.createOscillator(), lg = c.createGain();
+      lfo.frequency.value = o.vibrato; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(freq * (o.vibDepth || .025), t + dur * .4);
+      lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + .05);
+    }
+    if (o.lp){
+      var f = c.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = o.q || .8;
+      f.frequency.setValueAtTime(o.lp, t);
+      if (o.lpTo) f.frequency.exponentialRampToValueAtTime(o.lpTo, t + dur);
+      osc.connect(f); node = f;
+    }
+    var peak = o.gain || .15, a = o.attack || .006, r = Math.min(o.release || .12, dur * .9);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    if (dur - r > a) g.gain.setValueAtTime(peak * (o.sustain || 1), t + dur - r);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    node.connect(g); g.connect(dest);
+    osc.start(t); osc.stop(t + dur + .05);
+  }
+  function noise(c, dest, t, dur, o){
+    o = o || {};
+    if (!noiseBuf || noiseBuf.sampleRate !== c.sampleRate){
+      noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    var src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    f.type = o.ftype || 'bandpass'; f.frequency.value = o.freq || 2000; f.Q.value = o.q || 1;
+    var peak = o.gain || .1, a = o.attack || .003;
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(dest);
+    src.start(t, Math.random() * .5); src.stop(t + dur + .05);
+  }
+  // Sleigh-bell shake: a cluster of bright metallic pings over a burst of high noise.
+  function bells(c, dest, t, gain){
+    gain = gain || 1;
+    noise(c, dest, t, .16, {ftype:'highpass', freq:7000, gain:.05 * gain});
+    [2637, 3520, 4186, 5274].forEach(function(f, i){
+      tone(c, dest, t + i * .012, f * (1 + (Math.random() - .5) * .01), .22, {type:'sine', gain:.03 * gain, release:.2});
+    });
+  }
+  function chord(c, dest, t, notes, dur, o){
+    notes.forEach(function(n, i){
+      tone(c, dest, t, midi(n), dur, Object.assign({type:'sawtooth', gain:.07, lp:2600, attack:.02, release:Math.min(.35, dur * .6), detune:(i % 2 ? 6 : -6)}, o || {}));
+    });
+  }
+
+  function build(kind, c, dest, t){
+    if (kind === 'tick'){
+      tone(c, dest, t, midi(84), .12, {type:'sine', gain:.12});
+      tone(c, dest, t + .07, midi(91), .16, {type:'sine', gain:.1});
+      return .3;
+    }
+    if (kind === 'win'){
+      // punchy thump, then a bright rising arpeggio, a sparkle and a bell shake
+      tone(c, dest, t, 140, .22, {type:'sine', slideTo:55, gain:.35, release:.18});
+      [72, 76, 79, 84].forEach(function(n, i){
+        tone(c, dest, t + .05 + i * .075, midi(n), i === 3 ? .5 : .13, {type:'square', gain:.075, lp:3800, release:i === 3 ? .35 : .08});
+        tone(c, dest, t + .05 + i * .075, midi(n + 12), i === 3 ? .45 : .1, {type:'triangle', gain:.05});
+      });
+      [96, 100, 103, 108].forEach(function(n, i){ tone(c, dest, t + .34 + i * .045, midi(n), .18, {type:'sine', gain:.04}); });
+      bells(c, dest, t + .3, .9);
+      return .9;
+    }
+    if (kind === 'loss'){
+      // a heavy thud, then a sad trombone: four sliding steps down, the last one long and wobbly
+      tone(c, dest, t, 95, .35, {type:'sine', slideTo:38, gain:.4, release:.3});
+      noise(c, dest, t, .25, {ftype:'lowpass', freq:300, gain:.12});
+      var steps = [[55, 54], [54, 53], [53, 52]];
+      steps.forEach(function(s, i){
+        var st = t + .12 + i * .36;
+        tone(c, dest, st, midi(s[0]), .32, {type:'sawtooth', slideTo:midi(s[1]) * 1.01, gain:.13, lp:1100, attack:.03, release:.08});
+      });
+      tone(c, dest, t + .12 + 3 * .36, midi(52), 1.05, {type:'sawtooth', slideTo:midi(50), gain:.14, lp:1000, lpTo:450, attack:.03, release:.4, vibrato:6.5, vibDepth:.03});
+      return 2.4;
+    }
+    // perfect / six-stock: boom, drum roll, a rising brass fanfare (I-IV-V-I) under sleigh bells,
+    // firework pops in time with the bursts on screen, then a held shining chord with a cymbal swell.
+    tone(c, dest, t, 160, .6, {type:'sine', slideTo:40, gain:.5, release:.5});
+    noise(c, dest, t, .9, {ftype:'highpass', freq:4000, gain:.09});
+    for (var r = 0; r < 8; r++) noise(c, dest, t + .12 + r * .045, .05, {ftype:'bandpass', freq:1800, q:.7, gain:.05 + r * .008});
+    chord(c, dest, t + .5, [60, 64, 67], .32);
+    chord(c, dest, t + .82, [65, 69, 72], .32);
+    chord(c, dest, t + 1.14, [67, 71, 74], .32);
+    chord(c, dest, t + 1.46, [48, 72, 76, 79, 84], 1.25, {gain:.065, vibrato:5.5, vibDepth:.006, release:.6});
+    [72, 72, 72].forEach(function(n, i){ tone(c, dest, t + .5 + i * .107, midi(n + 12), .09, {type:'square', gain:.05, lp:4000}); });
+    [.45, .8, 1.15, 1.5, 1.75].forEach(function(d){
+      noise(c, dest, t + d, .12, {ftype:'bandpass', freq:1200, q:.6, gain:.14});
+      tone(c, dest, t + d - .25, 900, .25, {type:'sine', slideTo:2400, gain:.025});
+    });
+    for (var b = 0; b < 9; b++) bells(c, dest, t + .5 + b * .22, b > 4 ? 1.2 : .9);
+    [84, 86, 88, 91, 93, 96, 98, 100, 103, 105, 108].forEach(function(n, i){
+      tone(c, dest, t + 1.46 + i * .05, midi(n), .25, {type:'sine', gain:.035});
+    });
+    noise(c, dest, t + 1.3, 1.6, {ftype:'highpass', freq:6000, gain:.07, attack:.25});
+    return 3.1;
   }
 
   // ---------- snow ----------
@@ -220,5 +369,7 @@
     }
   }
 
-  window.SmashFX = {result:result, snow:snow, clear:clear};
+  window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound,
+    // test hook: render a sound into any AudioContext (e.g. an OfflineAudioContext)
+    _renderSound:function(kind, ctx){ var dest = out(ctx, ctx.destination); return build(kind, ctx, dest, .02); }};
 })();
