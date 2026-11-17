@@ -141,6 +141,7 @@
   function result(o){
     o = o || {};
     var snd = o.kind === 'perfect' || o.kind === 'loss' ? o.kind : 'win';
+    lastSpecific = performance.now();
     if (o.sound !== false) play(snd);
     if (reduced() || !document.body) return;
     ensureCss();
@@ -192,7 +193,26 @@
     comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = .003; comp.release.value = .2;
     var g = c.createGain(); g.gain.value = 1.1;
     g.connect(comp); comp.connect(dest);
+    // Shared hall reverb: sounds send to it with their `wet` option.
+    var conv = c.createConvolver(), wet = c.createGain();
+    conv.buffer = impulse(c, 2.6);
+    wet.gain.value = .8;
+    wet.connect(conv); conv.connect(g);
+    c.__wet = wet;
     return g;
+  }
+  function impulse(c, secs){
+    var len = Math.floor(c.sampleRate * secs), buf = c.createBuffer(2, len, c.sampleRate);
+    for (var ch = 0; ch < 2; ch++){
+      var d = buf.getChannelData(ch);
+      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    return buf;
+  }
+  function send(c, node, amount){
+    if (!amount || !c.__wet) return;
+    var s = c.createGain(); s.gain.value = amount;
+    node.connect(s); s.connect(c.__wet);
   }
   // Browsers only start audio after a tap or key press. Unlock on the first one, so a game that
   // arrives from the phone later can still play its sound on the tracker.
@@ -200,13 +220,34 @@
     window.addEventListener(ev, function(){ if (soundOn() && (!actx || actx.state !== 'running')) audio(); }, {passive:true, capture:true});
   });
   function setSound(on){
+    lastSpecific = performance.now();
     try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){}
-    if (on && audio()) build('tick', actx, master, actx.currentTime + .02);
+    if (on && audio()) build('chime', actx, master, actx.currentTime + .02);
   }
   function play(kind){
     if (!soundOn() || !audio()) return;
+    if (window.__sfxLog) window.__sfxLog.push(kind);
     try { build(kind, actx, master, actx.currentTime + .03); } catch(e){}
   }
+
+  // Small interface sounds. Pages call SmashFX.ui('tab' | 'up' | ...) for actions with their own sound;
+  // any other button gets a soft click from the listener below.
+  var lastUi = 0, lastUiKind = '', lastSpecific = 0;
+  function ui(kind){
+    lastSpecific = performance.now();
+    if (!soundOn() || !audio()) return;
+    var now = performance.now();
+    if (kind === lastUiKind && now - lastUi < 45) return;
+    lastUi = now; lastUiKind = kind;
+    if (window.__sfxLog) window.__sfxLog.push(kind);
+    try { build(UI[kind] ? kind : 'click', actx, master, actx.currentTime + .01); } catch(e){}
+  }
+  document.addEventListener('click', function(e){
+    var el = e.target && e.target.closest && e.target.closest('button,[role=button],[data-act],select,input[type=checkbox],input[type=radio]');
+    if (!el || el.disabled) return;
+    var at = performance.now();
+    setTimeout(function(){ if (lastSpecific < at) ui('click'); }, 0);
+  }, true);
 
   var midi = function(n){ return 440 * Math.pow(2, (n - 69) / 12); };
   function tone(c, dest, t, freq, dur, o){
@@ -232,24 +273,27 @@
     g.gain.exponentialRampToValueAtTime(peak, t + a);
     if (dur - r > a) g.gain.setValueAtTime(peak * (o.sustain || 1), t + dur - r);
     g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    node.connect(g); g.connect(dest);
+    node.connect(g); g.connect(dest); send(c, g, o.wet);
     osc.start(t); osc.stop(t + dur + .05);
   }
-  function noise(c, dest, t, dur, o){
-    o = o || {};
+  function noiseFor(c){
     if (!noiseBuf || noiseBuf.sampleRate !== c.sampleRate){
       noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
       var d = noiseBuf.getChannelData(0);
       for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
+    return noiseBuf;
+  }
+  function noise(c, dest, t, dur, o){
+    o = o || {};
     var src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-    src.buffer = noiseBuf; src.loop = true;
+    src.buffer = noiseFor(c); src.loop = true;
     f.type = o.ftype || 'bandpass'; f.frequency.value = o.freq || 2000; f.Q.value = o.q || 1;
     var peak = o.gain || .1, a = o.attack || .003;
     g.gain.setValueAtTime(.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + a);
     g.gain.exponentialRampToValueAtTime(.0001, t + dur);
-    src.connect(f); f.connect(g); g.connect(dest);
+    src.connect(f); f.connect(g); g.connect(dest); send(c, g, o.wet);
     src.start(t, Math.random() * .5); src.stop(t + dur + .05);
   }
   // Sleigh-bell shake: a cluster of bright metallic pings over a burst of high noise.
@@ -260,14 +304,134 @@
       tone(c, dest, t + i * .012, f * (1 + (Math.random() - .5) * .01), .22, {type:'sine', gain:.03 * gain, release:.2});
     });
   }
+  // Brass: two detuned saws per note, filter opening on the attack like a real horn swell.
+  function brass(c, dest, t, n, dur, o){
+    o = o || {};
+    var f = c.createBiquadFilter(), g = c.createGain(), peak = o.gain || .06, a = o.attack || .05;
+    f.type = 'lowpass'; f.Q.value = 1.5;
+    f.frequency.setValueAtTime(o.fFrom || 400, t);
+    f.frequency.exponentialRampToValueAtTime(o.fTo || 3200, t + a + .04);
+    f.frequency.exponentialRampToValueAtTime(o.fEnd || 1500, t + Math.max(a + .1, dur * .7));
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + Math.max(a, dur - (o.release || .35)));
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    [-7, 7].forEach(function(det){
+      var osc = c.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = midi(n); osc.detune.value = det;
+      if (o.vibrato){
+        var lfo = c.createOscillator(), lg = c.createGain();
+        lfo.frequency.value = o.vibrato; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(midi(n) * .006, t + dur * .5);
+        lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + .05);
+      }
+      osc.connect(f); osc.start(t); osc.stop(t + dur + .05);
+    });
+    f.connect(g); g.connect(dest); send(c, g, o.wet === undefined ? .45 : o.wet);
+  }
+  function timpani(c, dest, t, freq, gain){
+    var osc = c.createOscillator(), g = c.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq * 1.45, t); osc.frequency.exponentialRampToValueAtTime(freq, t + .06);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(gain || .35, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + 1.1);
+    osc.connect(g); g.connect(dest); send(c, g, .5);
+    osc.start(t); osc.stop(t + 1.15);
+    noise(c, dest, t, .08, {ftype:'lowpass', freq:900, gain:(gain || .35) * .4, wet:.3});
+  }
+  // Glockenspiel: bright bell partials.
+  function glock(c, dest, t, n, gain){
+    var f0 = midi(n);
+    [[1, 1], [2.76, .35], [5.4, .12]].forEach(function(pt){
+      if (f0 * pt[0] > Math.min(16000, c.sampleRate * .45)) return;
+      tone(c, dest, t, f0 * pt[0], 1.2 / pt[0] + .2, {type:'sine', gain:(gain || .05) * pt[1], attack:.002, release:1, sustain:.4, wet:.5});
+    });
+  }
+  // Soft choir-like pad.
+  function pad(c, dest, t, notes, dur, gain){
+    notes.forEach(function(n, i){
+      tone(c, dest, t, midi(n), dur, {type:'triangle', gain:gain || .035, attack:.45, release:.8, lp:1800, vibrato:5 + i * .3, vibDepth:.004, detune:(i % 2 ? 9 : -9), wet:.7});
+    });
+  }
+  function distortion(c, amount){
+    var ws = c.createWaveShaper(), n = 1024, curve = new Float32Array(n);
+    for (var i = 0; i < n; i++){ var x = i * 2 / n - 1; curve[i] = Math.tanh(x * amount) / Math.tanh(amount); }
+    ws.curve = curve; ws.oversample = '2x';
+    return ws;
+  }
+
   function chord(c, dest, t, notes, dur, o){
     notes.forEach(function(n, i){
       tone(c, dest, t, midi(n), dur, Object.assign({type:'sawtooth', gain:.07, lp:2600, attack:.02, release:Math.min(.35, dur * .6), detune:(i % 2 ? 6 : -6)}, o || {}));
     });
   }
 
+
+  // ---------- interface sounds (quiet and short) ----------
+  function whoosh(c, dest, t, from, to, dur, gain){
+    var src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = noiseFor(c); src.loop = true;
+    f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(from, t); f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + dur * .45); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(dest);
+    src.start(t, Math.random() * .5); src.stop(t + dur + .05);
+  }
+  var UI = {
+    click: function(c, d, t){
+      tone(c, d, t, 1500, .035, {type:'sine', gain:.05, release:.03});
+      noise(c, d, t, .02, {ftype:'highpass', freq:5000, gain:.02});
+      return .06;
+    },
+    tab: function(c, d, t){
+      whoosh(c, d, t, 700, 3200, .16, .07);
+      tone(c, d, t + .03, midi(88), .07, {type:'triangle', gain:.06});
+      tone(c, d, t + .08, midi(93), .1, {type:'triangle', gain:.055});
+      return .2;
+    },
+    up: function(c, d, t){ tone(c, d, t, 520, .09, {type:'sine', slideTo:980, gain:.11, release:.06}); return .1; },
+    down: function(c, d, t){ tone(c, d, t, 760, .09, {type:'sine', slideTo:400, gain:.1, release:.06}); return .1; },
+    select: function(c, d, t){
+      tone(c, d, t, midi(84), .08, {type:'triangle', gain:.08});
+      tone(c, d, t + .06, midi(91), .14, {type:'triangle', gain:.07});
+      return .22;
+    },
+    back: function(c, d, t){
+      tone(c, d, t, midi(79), .08, {type:'triangle', gain:.07});
+      tone(c, d, t + .06, midi(72), .13, {type:'triangle', gain:.065});
+      return .2;
+    },
+    open: function(c, d, t){ whoosh(c, d, t, 500, 2600, .14, .06); tone(c, d, t + .05, midi(81), .08, {type:'sine', gain:.05}); return .18; },
+    close: function(c, d, t){ whoosh(c, d, t, 2600, 500, .14, .09); tone(c, d, t + .04, midi(76), .08, {type:'sine', gain:.04}); return .16; },
+    pick: function(c, d, t){
+      [84, 88, 91].forEach(function(n, i){ tone(c, d, t + i * .04, midi(n), .12, {type:'triangle', gain:.065}); });
+      tone(c, d, t + .1, midi(103), .18, {type:'sine', gain:.03});
+      return .3;
+    },
+    toggle: function(c, d, t){
+      tone(c, d, t, 900, .02, {type:'square', gain:.035, lp:3000});
+      tone(c, d, t + .035, 1400, .025, {type:'square', gain:.03, lp:3000});
+      return .08;
+    },
+    undo: function(c, d, t){
+      whoosh(c, d, t, 3000, 600, .18, .06);
+      tone(c, d, t + .04, midi(86), .08, {type:'triangle', gain:.06});
+      tone(c, d, t + .1, midi(79), .12, {type:'triangle', gain:.055});
+      return .25;
+    },
+    spin: function(c, d, t){ tone(c, d, t, 1700 + Math.random() * 500, .025, {type:'sine', gain:.045}); return .04; },
+    land: function(c, d, t){
+      [79, 84, 88].forEach(function(n){ tone(c, d, t, midi(n), .35, {type:'triangle', gain:.05, release:.3}); });
+      bells(c, d, t + .02, .7);
+      return .4;
+    },
+    success: function(c, d, t){
+      [76, 81, 88].forEach(function(n, i){ tone(c, d, t + i * .07, midi(n), .2, {type:'sine', gain:.07}); });
+      return .35;
+    }
+  };
+
   function build(kind, c, dest, t){
-    if (kind === 'tick'){
+    if (UI[kind]) return UI[kind](c, dest, t);
+    if (kind === 'chime'){
       tone(c, dest, t, midi(84), .12, {type:'sine', gain:.12});
       tone(c, dest, t + .07, midi(91), .16, {type:'sine', gain:.1});
       return .3;
@@ -284,37 +448,60 @@
       return .9;
     }
     if (kind === 'loss'){
-      // a heavy thud, then a sad trombone: four sliding steps down, the last one long and wobbly
-      tone(c, dest, t, 95, .35, {type:'sine', slideTo:38, gain:.4, release:.3});
-      noise(c, dest, t, .25, {ftype:'lowpass', freq:300, gain:.12});
-      var steps = [[55, 54], [54, 53], [53, 52]];
-      steps.forEach(function(s, i){
-        var st = t + .12 + i * .36;
-        tone(c, dest, st, midi(s[0]), .32, {type:'sawtooth', slideTo:midi(s[1]) * 1.01, gain:.13, lp:1100, attack:.03, release:.08});
+      // A doom hit: sub drop, metallic clang, and a distorted, dissonant low brass "BRAAAM" that sinks,
+      // an eerie high tritone over it, then a slow, heavy heartbeat.
+      tone(c, dest, t, 85, 1.6, {type:'sine', slideTo:26, gain:.55, attack:.004, release:1.3});
+      noise(c, dest, t, .5, {ftype:'lowpass', freq:220, gain:.3, wet:.4});
+      [211, 317, 486, 733, 1109].forEach(function(f, i){
+        tone(c, dest, t, f, 1.4 - i * .15, {type:'sine', gain:.05 - i * .007, attack:.002, release:1.1, sustain:.3, wet:.9});
       });
-      tone(c, dest, t + .12 + 3 * .36, midi(52), 1.05, {type:'sawtooth', slideTo:midi(50), gain:.14, lp:1000, lpTo:450, attack:.03, release:.4, vibrato:6.5, vibDepth:.03});
-      return 2.4;
+      var shaper = distortion(c, 3), lp = c.createBiquadFilter(), bg = c.createGain();
+      lp.type = 'lowpass'; lp.Q.value = 2;
+      lp.frequency.setValueAtTime(140, t); lp.frequency.exponentialRampToValueAtTime(1300, t + .35); lp.frequency.exponentialRampToValueAtTime(260, t + 2.6);
+      bg.gain.setValueAtTime(.0001, t); bg.gain.exponentialRampToValueAtTime(.2, t + .12);
+      bg.gain.setValueAtTime(.2, t + 1.4); bg.gain.exponentialRampToValueAtTime(.0001, t + 2.8);
+      shaper.connect(lp); lp.connect(bg); bg.connect(dest); send(c, bg, .55);
+      [[24, -10], [36, 8], [37, -6], [43, 12], [48, -4]].forEach(function(v){
+        var osc = c.createOscillator();
+        osc.type = 'sawtooth'; osc.detune.value = v[1];
+        osc.frequency.setValueAtTime(midi(v[0]), t);
+        osc.frequency.setValueAtTime(midi(v[0]), t + .9);
+        osc.frequency.exponentialRampToValueAtTime(midi(v[0] - 2), t + 2.7);
+        osc.connect(shaper); osc.start(t); osc.stop(t + 2.85);
+      });
+      tone(c, dest, t + .25, midi(78), 2.3, {type:'sine', gain:.022, attack:.6, release:1.2, vibrato:3.2, vibDepth:.012, wet:.9});
+      tone(c, dest, t + .25, midi(72), 2.3, {type:'sine', gain:.022, attack:.6, release:1.2, vibrato:2.7, vibDepth:.012, wet:.9});
+      [1.75, 1.95, 2.75, 2.95].forEach(function(d, i){
+        tone(c, dest, t + d, i % 2 ? 48 : 58, .32, {type:'sine', slideTo:30, gain:i % 2 ? .3 : .42, attack:.004, release:.28});
+      });
+      return 3.4;
     }
-    // perfect / six-stock: boom, drum roll, a rising brass fanfare (I-IV-V-I) under sleigh bells,
-    // firework pops in time with the bursts on screen, then a held shining chord with a cymbal swell.
-    tone(c, dest, t, 160, .6, {type:'sine', slideTo:40, gain:.5, release:.5});
-    noise(c, dest, t, .9, {ftype:'highpass', freq:4000, gain:.09});
-    for (var r = 0; r < 8; r++) noise(c, dest, t + .12 + r * .045, .05, {ftype:'bandpass', freq:1800, q:.7, gain:.05 + r * .008});
-    chord(c, dest, t + .5, [60, 64, 67], .32);
-    chord(c, dest, t + .82, [65, 69, 72], .32);
-    chord(c, dest, t + 1.14, [67, 71, 74], .32);
-    chord(c, dest, t + 1.46, [48, 72, 76, 79, 84], 1.25, {gain:.065, vibrato:5.5, vibDepth:.006, release:.6});
-    [72, 72, 72].forEach(function(n, i){ tone(c, dest, t + .5 + i * .107, midi(n + 12), .09, {type:'square', gain:.05, lp:4000}); });
-    [.45, .8, 1.15, 1.5, 1.75].forEach(function(d){
-      noise(c, dest, t + d, .12, {ftype:'bandpass', freq:1200, q:.6, gain:.14});
-      tone(c, dest, t + d - .25, 900, .25, {type:'sine', slideTo:2400, gain:.025});
+    if (kind !== 'perfect') return 0;
+    // Six-stock / flawless: a cinematic victory. Reverse swell into a huge impact, timpani under wide brass
+    // climbing C - A flat - B flat - C, then a held, shining C major with choir pad and glockenspiel.
+    var hit = t + .4;
+    noise(c, dest, t, .42, {ftype:'highpass', freq:3000, gain:.12, attack:.4, wet:.3});
+    tone(c, dest, t + .05, 180, .37, {type:'sine', slideTo:900, gain:.025, attack:.3, wet:.4});
+    tone(c, dest, hit, 72, 1.3, {type:'sine', slideTo:34, gain:.5, attack:.004, release:1});
+    noise(c, dest, hit, .35, {ftype:'lowpass', freq:300, gain:.25, wet:.3});
+    noise(c, dest, hit, 2.6, {ftype:'highpass', freq:5500, gain:.07, wet:.6});
+    var prog = [
+      {at:0,    dur:.55, notes:[36, 48, 55, 60, 64, 67], timp:midi(36)},
+      {at:.55,  dur:.38, notes:[32, 44, 51, 56, 60, 63], timp:midi(32)},
+      {at:.93,  dur:.38, notes:[34, 46, 53, 58, 62, 65], timp:midi(34)},
+      {at:1.31, dur:2.2, notes:[36, 48, 55, 60, 64, 67, 72, 76], timp:midi(36), last:true}
+    ];
+    prog.forEach(function(ch){
+      timpani(c, dest, hit + ch.at, ch.timp * 2, ch.last ? .45 : .32);
+      ch.notes.forEach(function(n){
+        brass(c, dest, hit + ch.at, n, ch.dur, {gain:n < 45 ? .05 : .042, attack:ch.last ? .08 : .04, release:ch.last ? .9 : .12, vibrato:ch.last ? 5.2 : 0});
+      });
     });
-    for (var b = 0; b < 9; b++) bells(c, dest, t + .5 + b * .22, b > 4 ? 1.2 : .9);
-    [84, 86, 88, 91, 93, 96, 98, 100, 103, 105, 108].forEach(function(n, i){
-      tone(c, dest, t + 1.46 + i * .05, midi(n), .25, {type:'sine', gain:.035});
-    });
-    noise(c, dest, t + 1.3, 1.6, {ftype:'highpass', freq:6000, gain:.07, attack:.25});
-    return 3.1;
+    for (var r = 0; r < 10; r++) timpani(c, dest, hit + 1.05 + r * .025, midi(34) * 2, .06 + r * .012);
+    pad(c, dest, hit + 1.25, [60, 64, 67, 72], 2.4, .03);
+    [84, 88, 91, 96, 100, 103, 108].forEach(function(n, i){ glock(c, dest, hit + 1.36 + i * .07, n, .05); });
+    glock(c, dest, hit + 2.0, 96, .06);
+    return 4.2;
   }
 
   // ---------- snow ----------
@@ -369,7 +556,7 @@
     }
   }
 
-  window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound,
+  window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound, ui:ui,
     // test hook: render a sound into any AudioContext (e.g. an OfflineAudioContext)
     _renderSound:function(kind, ctx){ var dest = out(ctx, ctx.destination); return build(kind, ctx, dest, .02); }};
 })();

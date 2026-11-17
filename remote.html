@@ -402,6 +402,16 @@
     drawSheet();
   }
 
+  // Each action's own interface sound (fx.js); anything not listed gets fx.js's default soft click.
+  var ACT_SOUND = {mode:'toggle', pick:'open', choose:'pick', closePicker:'close', result:'select', cancel:'back',
+    stocks:'toggle', stage:'toggle', items:'toggle', snow:'toggle', signout:'back'};
+  function uiSound(el){
+    if (!window.SmashFX) return;
+    var act = el.dataset.act, kind = ACT_SOUND[act];
+    if (act === 'ko') kind = Number(el.dataset.d) > 0 ? 'up' : 'down';
+    if (act === 'undo') kind = S.undoArm === Number(el.dataset.v) ? 'undo' : 'select';
+    if (kind) window.SmashFX.ui(kind);
+  }
   function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function snowOn(){ try { return localStorage.getItem('stocklog.snow') !== 'off'; } catch(e){ return true; } }
   function footView(){
@@ -566,6 +576,7 @@
     S.busy = true; S.err = ''; render();
     (create ? sync.signUp(email, pw) : sync.signIn(email, pw)).then(function(r){
       S.busy = false;
+      if (window.SmashFX) window.SmashFX.ui('success');
       if (create && r && r.needsConfirm) S.err = 'Account made. Check your email for the confirmation link, then sign in.';
       render();
     }).catch(function(e){
@@ -584,7 +595,7 @@
     if (!el) return;
     if (el.dataset.act === 'cancel' && e.target.closest('[data-stop]') && !e.target.closest('button')) return;
     var fn = handlers[el.dataset.act];
-    if (fn){ e.preventDefault(); fn(el); }
+    if (fn){ e.preventDefault(); uiSound(el); fn(el); }
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target && (e.target.id === 'email' || e.target.id === 'password')) auth(false);
