@@ -4,7 +4,7 @@ Smash Tracker sound credits
 The files in this folder were trimmed, loudness-normalized and converted to
 mono MP3 for the app. The original works and their licenses are below.
 
-Announcer voice lines (win-*, six-*, lose-*, roast-* files)
+Announcer voice lines (win-*, six-*, lose-*, roast-* files, except the *-joe-* ones)
   BANTER MAN, MR. HAPPY, GRENADIER, DRAGON and DROID video game announcer packs
   by VoiceBosch, part of the SoundBiter SFX library
   License: CC BY-SA 4.0  https://creativecommons.org/licenses/by-sa/4.0/
@@ -15,11 +15,11 @@ Announcer voice lines (win-*, six-*, lose-*, roast-* files)
   https://opengameart.org/content/droid-video-game-announcer
   The edited versions in this folder are shared under the same license, CC BY-SA 4.0.
 
-Crowd cheering (six-crowd-cheer.mp3)
+Crowd cheering (six-crowd-cheer.mp3, cel-crowd-roar.mp3, cel-crowd-chant.mp3)
   "Free Crowd Cheering Sounds" by Gregor Quendel
   License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
   https://opengameart.org/content/free-crowd-cheering-sounds
-  Cut to the first 6.5 seconds with fades.
+  Cut to short sections with fades.
 
 Jingles (jingle-win-*, jingle-sad-* files)
   "85 Short music jingles" by Kenney (www.kenney.nl)
@@ -39,5 +39,16 @@ The one-word loss (lose-fuck.mp3)
   https://commons.wikimedia.org/wiki/File:En-us-fuck.ogg
   Trimmed, loudness-normalized and converted to MP3; shared under CC BY-SA 3.0.
 
-"You suck, bro" is spoken by the device's own text-to-speech voice.
+Applause (cel-applause.mp3)
+  "Applause in a large hall or church" by eXpl0it3r
+  License: CC0  https://opengameart.org/content/applause-in-a-large-hall-or-church
+
+Fireworks with applause (cel-fireworks.mp3)
+  "Fireworks With Applause Happy People" by Almitory (used under its CC0 option)
+  License: CC0  https://opengameart.org/content/fireworks-with-applause-happy-people
+
+Name callouts and short lines (call-*.mp3 and *-joe-*.mp3)
+  Generated with the Piper text-to-speech engine (https://github.com/rhasspy/piper)
+  using the "joe" voice (en_US-joe-medium), whose training data is released as CC0.
+  https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/joe/medium
 All other sounds are synthesized in fx.js.
