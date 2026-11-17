@@ -1,0 +1,37 @@
+Smash Tracker sound credits
+===========================
+
+The files in this folder were trimmed, loudness-normalized and converted to
+mono MP3 for the app. The original works and their licenses are below.
+
+Announcer voice lines (win-*, six-*, lose-*, roast-* files)
+  BANTER MAN, MR. HAPPY, GRENADIER, DRAGON and DROID video game announcer packs
+  by VoiceBosch, part of the SoundBiter SFX library
+  License: CC BY-SA 4.0  https://creativecommons.org/licenses/by-sa/4.0/
+  https://opengameart.org/content/banter-man-video-game-announcer
+  https://opengameart.org/content/mr-happy-video-game-announcer
+  https://opengameart.org/content/grenadier-video-game-announcer
+  https://opengameart.org/content/dragon-announcer-audio-pack
+  https://opengameart.org/content/droid-video-game-announcer
+  The edited versions in this folder are shared under the same license, CC BY-SA 4.0.
+
+Crowd cheering (six-crowd-cheer.mp3)
+  "Free Crowd Cheering Sounds" by Gregor Quendel
+  License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
+  https://opengameart.org/content/free-crowd-cheering-sounds
+  Cut to the first 6.5 seconds with fades.
+
+Jingles (jingle-win-*, jingle-sad-* files)
+  "85 Short music jingles" by Kenney (www.kenney.nl)
+  License: CC0  https://opengameart.org/content/85-short-music-jingles
+
+Sad trombone (sad-trombone.mp3)
+  "Game Over Trumpet SFX" by 0new4y
+  License: CC0  https://opengameart.org/content/game-over-trumpet-sfx
+
+Heartbeat (heartbeat.mp3)
+  "Heartbeat sounds" by bart
+  License: CC0  https://opengameart.org/content/heartbeat-sounds
+
+"You suck, bro" is spoken by the device's own text-to-speech voice.
+All other sounds are synthesized in fx.js.

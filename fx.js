@@ -183,6 +183,7 @@
     if (!actx){
       try { actx = new AC(); } catch(e){ return null; }
       master = out(actx, actx.destination);
+      preloadSamples();
     }
     if (actx.state === 'suspended'){ try { actx.resume(); } catch(e){} }
     return actx;
@@ -227,7 +228,118 @@
   function play(kind){
     if (!soundOn() || !audio()) return;
     if (window.__sfxLog) window.__sfxLog.push(kind);
-    try { build(kind, actx, master, actx.currentTime + .03); } catch(e){}
+    try {
+      if (!playResult(kind)) build(kind, actx, master, actx.currentTime + .03);
+    } catch(e){}
+  }
+
+  // ---------- recorded sounds (sounds/, credits in sounds/CREDITS.txt) ----------
+  var SAMPLES = {
+    winJingle: ['jingle-win-sax02', 'jingle-win-nes12', 'jingle-win-hit11', 'jingle-win-sax10', 'jingle-win-nes08', 'jingle-win-sax12'],
+    winVoice: ['win-happy_you_win', 'win-happy_winner', 'win-happy_victory', 'win-gren_you_win', 'win-gren_victory', 'win-gren_mvp', 'win-dragon_victor', 'win-dragon_knockout'],
+    sixVoice: ['six-gren_epic_win'],
+    sixAfter: ['six-happy_congratulations', 'six-droid_epic'],
+    sixCrowd: ['six-crowd-cheer'],
+    loseVoice: ['lose-happy_you_lose', 'lose-happy_defeat', 'lose-happy_failure', 'lose-happy_game_over', 'lose-gren_you_lose', 'lose-gren_mission_failed',
+      'lose-dragon_pathetic', 'lose-dragon_disappointing', 'lose-dragon_you_died', 'lose-dragon_finality', 'lose-droid_ineffective_strategy'],
+    roastVoice: ['roast-how_embarrassing', 'roast-thats_gotta_hurt', 'roast-somebody_call_a_doctor', 'roast-what_a_beating', 'roast-weak_sauce',
+      'roast-thats_unfortunate', 'roast-i_felt_that_one', 'roast-that_looks_painful', 'roast-what_a_snoozefest', 'roast-cleanup_on_aisle_4'],
+    sadSting: ['sad-trombone', 'jingle-sad-steel07', 'jingle-sad-steel05', 'jingle-sad-steel03'],
+    heartbeat: ['heartbeat']
+  };
+  var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
+  var buffers = {}, loading = false, lastPick = {};
+  function preloadSamples(){
+    if (loading || !actx) return;
+    loading = true;
+    try { if (window.speechSynthesis) speechSynthesis.getVoices(); } catch(e){}
+    var names = [];
+    Object.keys(SAMPLES).forEach(function(k){ SAMPLES[k].forEach(function(n){ if (names.indexOf(n) < 0) names.push(n); }); });
+    names.forEach(function(n){
+      fetch(SOUND_BASE + n + '.mp3').then(function(r){ if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(function(ab){
+          return new Promise(function(res, rej){ var p = actx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
+        })
+        .then(function(buf){ buffers[n] = buf; })
+        .catch(function(){});
+    });
+  }
+  // Random clip from a set, never the same one twice in a row; null if none have loaded yet.
+  function pick(set){
+    var ready = SAMPLES[set].filter(function(n){ return buffers[n]; });
+    if (!ready.length) return null;
+    var options = ready.length > 1 ? ready.filter(function(n){ return n !== lastPick[set]; }) : ready;
+    var n = options[Math.floor(Math.random() * options.length)];
+    lastPick[set] = n;
+    return n;
+  }
+  function sample(name, t, gain, wet){
+    var buf = name && buffers[name];
+    if (!buf) return 0;
+    var src = actx.createBufferSource(), g = actx.createGain();
+    src.buffer = buf; g.gain.value = gain || 1;
+    src.connect(g); g.connect(master); send(actx, g, wet);
+    src.start(t);
+    if (window.__sfxLog) window.__sfxLog.push('clip:' + name);
+    return buf.duration;
+  }
+  function speak(text, delay){
+    try {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
+      var u = new SpeechSynthesisUtterance(text);
+      var voices = speechSynthesis.getVoices().filter(function(v){ return /^en/i.test(v.lang); });
+      var bro = voices.filter(function(v){ return /daniel|alex|fred|aaron|arthur|rishi|male|guy|david|mark/i.test(v.name); })[0] || voices[0];
+      if (bro) u.voice = bro;
+      u.pitch = .75; u.rate = .92; u.volume = 1;
+      var go = function(){ try { speechSynthesis.cancel(); speechSynthesis.speak(u); } catch(e){} };
+      if (window.__sfxLog) window.__sfxLog.push('say:' + text);
+      // iPhone and iPad only speak from inside the tap itself, so no delay there.
+      var ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (ios || !delay) go(); else setTimeout(go, delay);
+      return true;
+    } catch(e){ return false; }
+  }
+  // Recorded result sounds. Returns false when the clips aren't loaded yet, so the synthesized version plays instead.
+  function playResult(kind){
+    var t = actx.currentTime + .03;
+    if (kind === 'win'){
+      var jingle = pick('winJingle'), voice = pick('winVoice');
+      if (!jingle && !voice) return false;
+      var jd = sample(jingle, t, .8, .25);
+      sample(voice, t + (jd ? Math.min(.45, jd * .55) : 0), 1.15, .2);
+      return true;
+    }
+    if (kind === 'perfect'){
+      var epic = pick('sixVoice');
+      if (!epic) return false;
+      build('perfect', actx, master, t);
+      sample(pick('sixCrowd'), t + .38, .7, .15);
+      sample(epic, t + .45, 1.35, .35);
+      if (Math.random() < .6) sample(pick('sixAfter'), t + 2.35, 1.1, .3);
+      return true;
+    }
+    if (kind === 'loss'){
+      var r = Math.random();
+      if (r < .45){
+        // devastating: the doom hit with a grim announcer line once it lands
+        var grim = pick('loseVoice');
+        if (!grim) return false;
+        var duck = actx.createGain(); duck.gain.value = .6; duck.connect(master);
+        build('loss', actx, duck, t);
+        sample(grim, t + .45, 1.35, .45);
+        if (Math.random() < .5) sample(pick('heartbeat'), t + 2.1, .9, .3);
+        return true;
+      }
+      // roast: a sad sting, then a heckle (or, sometimes, the device's own voice telling you)
+      var sting = pick('sadSting');
+      if (!sting) return false;
+      var sd = sample(sting, t, .85, .2);
+      var at = Math.min(sd, 1.0) + .05;
+      if (r > .82 && speak('You suck, bro.', at * 1000)) return true;
+      sample(pick('roastVoice'), t + at, 1.25, .2);
+      return true;
+    }
+    return false;
   }
 
   // Small interface sounds. Pages call SmashFX.ui('tab' | 'up' | ...) for actions with their own sound;
