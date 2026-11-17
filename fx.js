@@ -245,7 +245,8 @@
     roastVoice: ['roast-how_embarrassing', 'roast-thats_gotta_hurt', 'roast-somebody_call_a_doctor', 'roast-what_a_beating', 'roast-weak_sauce',
       'roast-thats_unfortunate', 'roast-i_felt_that_one', 'roast-that_looks_painful', 'roast-what_a_snoozefest', 'roast-cleanup_on_aisle_4'],
     sadSting: ['sad-trombone', 'jingle-sad-steel07', 'jingle-sad-steel05', 'jingle-sad-steel03'],
-    heartbeat: ['heartbeat']
+    heartbeat: ['heartbeat'],
+    fword: ['lose-fuck']
   };
   var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
   var buffers = {}, loading = false, lastPick = {};
@@ -320,7 +321,14 @@
     }
     if (kind === 'loss'){
       var r = Math.random();
-      if (r < .45){
+      if (r < .12){
+        // sometimes it's just one word, and that's it
+        var f = pick('fword');
+        if (f){ sample(f, t, 1.5, .25); return true; }
+        if (speak('Fuck.', 0)) return true;
+        r = .5;
+      }
+      if (r < .52){
         // devastating: the doom hit with a grim announcer line once it lands
         var grim = pick('loseVoice');
         if (!grim) return false;
@@ -335,7 +343,7 @@
       if (!sting) return false;
       var sd = sample(sting, t, .85, .2);
       var at = Math.min(sd, 1.0) + .05;
-      if (r > .82 && speak('You suck, bro.', at * 1000)) return true;
+      if (r > .86 && speak('You suck, bro.', at * 1000)) return true;
       sample(pick('roastVoice'), t + at, 1.25, .2);
       return true;
     }

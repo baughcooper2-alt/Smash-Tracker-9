@@ -33,5 +33,11 @@ Heartbeat (heartbeat.mp3)
   "Heartbeat sounds" by bart
   License: CC0  https://opengameart.org/content/heartbeat-sounds
 
+The one-word loss (lose-fuck.mp3)
+  "En-us-fuck.ogg", recorded by Benjamin Baker, 7 July 2006 (Wiktionary pronunciation)
+  License: CC BY-SA 3.0  https://creativecommons.org/licenses/by-sa/3.0/
+  https://commons.wikimedia.org/wiki/File:En-us-fuck.ogg
+  Trimmed, loudness-normalized and converted to MP3; shared under CC BY-SA 3.0.
+
 "You suck, bro" is spoken by the device's own text-to-speech voice.
 All other sounds are synthesized in fx.js.
