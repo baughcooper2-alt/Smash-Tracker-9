@@ -548,15 +548,12 @@
       if (!result) return;
       S.pending = null;
       var margin = Number(el.dataset.v) || 0, mode = get('mode'), stocks = Number(get('stocks')) || 3;
-      var handoff = !!get('handoffOn');
-      var callout = {mode:mode, koCooper:Number(get('koMe')) || 0, koNathan:Number(get('koNathan')) || 0, handoff:handoff, logger:handoff ? 'nathan' : 'cooper'};
       logGame(result, margin);
       var flawless = result === 'W' && margin >= fullStocks(mode, stocks);
       toast((flawless ? '\u2605 ' + perfectWord(mode, stocks) : result === 'W' ? 'WIN' : 'LOSS') + ' LOGGED' + (S.sync.phase === 'offline' ? ' — WILL SYNC' : ''));
       if (window.SmashFX) window.SmashFX.result({kind: flawless ? 'perfect' : result === 'W' ? 'win' : 'loss',
         title: flawless ? perfectWord(mode, stocks) + '!' : result === 'W' ? 'WIN!' : 'LOSS',
-        sub: flawless ? (mode === 'doubles' ? 'FLAWLESS · NOBODY DIED' : 'FLAWLESS · NO STOCKS LOST') : result === 'W' ? (margin ? 'WON BY ' + margin : 'GG') : (margin ? 'DOWN ' + margin : 'SHAKE IT OFF'),
-        callout:callout});
+        sub: flawless ? (mode === 'doubles' ? 'FLAWLESS · NOBODY DIED' : 'FLAWLESS · NO STOCKS LOST') : result === 'W' ? (margin ? 'WON BY ' + margin : 'GG') : (margin ? 'DOWN ' + margin : 'SHAKE IT OFF')});
       else buzz([30, 40, 30]);
     },
     undo: function(el){
