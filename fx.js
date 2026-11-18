@@ -142,7 +142,7 @@
     o = o || {};
     var snd = o.kind === 'perfect' || o.kind === 'loss' ? o.kind : 'win';
     lastSpecific = performance.now();
-    if (o.sound !== false) play(snd, o.callout);
+    if (o.sound !== false) play(snd);
     if (reduced() || !document.body) return;
     ensureCss();
     clear();
@@ -225,53 +225,28 @@
     try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){}
     if (on && audio()) build('chime', actx, master, actx.currentTime + .02);
   }
-  function play(kind, callout){
+  function play(kind){
     if (!soundOn() || !audio()) return;
     if (window.__sfxLog) window.__sfxLog.push(kind);
     try {
-      if (!playResult(kind, callout)) build(kind, actx, master, actx.currentTime + .03);
+      if (!playResult(kind)) build(kind, actx, master, actx.currentTime + .03);
     } catch(e){}
   }
 
   // ---------- recorded sounds (sounds/, credits in sounds/CREDITS.txt) ----------
   var SAMPLES = {
     winJingle: ['jingle-win-sax02', 'jingle-win-nes12', 'jingle-win-hit11', 'jingle-win-sax10', 'jingle-win-nes08', 'jingle-win-sax12'],
-    winVoice: ['win-happy_you_win', 'win-happy_winner', 'win-happy_victory', 'win-gren_you_win', 'win-gren_victory', 'win-gren_mvp', 'win-dragon_victor',
-      'win-dragon_knockout', 'win-gren_kill_confirmed', 'win-gren_mission_complete', 'win-dragon_ko', 'win-dragon_savagery', 'win-dragon_vicious',
-      'win-banter_are_you_not_entertained', 'win-banter_why_i_love_my_job',
-      'win-joe-easy', 'win-joe-too_easy', 'win-joe-lets_go', 'win-joe-clean', 'win-joe-sit_down', 'win-joe-diff', 'win-joe-wrecked', 'win-joe-cooked'],
     celebrate: ['cel-crowd-roar', 'cel-crowd-chant', 'cel-applause', 'cel-fireworks'],
-    sixVoice: ['six-gren_epic_win'],
-    sixAfter: ['six-happy_congratulations', 'six-droid_epic'],
     sixCrowd: ['six-crowd-cheer'],
-    // losses stay short: mostly one word, a few two-word lines
-    loseShort: ['lose-happy_defeat', 'lose-happy_failure', 'lose-dragon_pathetic', 'lose-dragon_disappointing', 'lose-dragon_finality', 'lose-gren_kaboom',
-      'lose-gren_elimination', 'lose-dragon_decimation', 'lose-dragon_execution', 'lose-happy_you_lose', 'lose-gren_you_lose', 'lose-happy_game_over',
-      'lose-dragon_you_died', 'lose-gren_mission_failed',
-      'lose-joe-trash', 'lose-joe-washed', 'lose-joe-cooked', 'lose-joe-yikes', 'lose-joe-oof', 'lose-joe-bruh', 'lose-joe-unlucky', 'lose-joe-tragic', 'lose-joe-uninstall'],
-    // the funny ones: two to four words
-    roastShort: ['roast-how_embarrassing', 'roast-thats_gotta_hurt', 'roast-somebody_call_a_doctor', 'roast-what_a_beating', 'roast-weak_sauce',
-      'roast-thats_unfortunate', 'roast-that_looks_painful', 'roast-what_a_snoozefest', 'roast-friendly_fire',
-      'roast-joe-skill_issue', 'roast-joe-get_good', 'roast-joe-you_suck_bro', 'roast-joe-not_even_close', 'roast-joe-go_next', 'roast-joe-down_bad', 'roast-joe-touch_grass'],
-    sadSting: ['sad-trombone', 'jingle-sad-steel07', 'jingle-sad-steel05', 'jingle-sad-steel03'],
-    heartbeat: ['heartbeat'],
-    fword: ['lose-fuck']
+    // Loss sayings (Kokoro TTS, am_fenrir voice). The swears play on their own, nothing under them.
+    lossSay: ['loss-fuck', 'loss-yuck', 'loss-fuck-x5', 'loss-ugh', 'loss-come-on-bro', 'loss-laugh', 'loss-losers', 'loss-how-did-you-lose', 'loss-turn-off-switch'],
+    sadSting: ['sad-trombone', 'jingle-sad-steel07', 'jingle-sad-steel05', 'jingle-sad-steel03']
   };
-  // Name callouts (Joe voice): call-<situation>-<name>-<n>.mp3
-  [['wincarry', 4], ['winzero', 2], ['winsolo', 3], ['loseblame', 4], ['losezero', 3], ['losesolo', 3], ['sixsolo', 2]].forEach(function(s){
-    ['cooper', 'nathan'].forEach(function(n){
-      var list = [];
-      for (var i = 1; i <= s[1]; i++) list.push('call-' + s[0] + '-' + n + '-' + i);
-      SAMPLES['call:' + s[0] + ':' + n] = list;
-    });
-  });
-  SAMPLES['call:sixduo:x'] = ['call-sixduo-x-1', 'call-sixduo-x-2'];
   var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
   var buffers = {}, loading = false, lastPick = {};
   function preloadSamples(){
     if (loading || !actx) return;
     loading = true;
-    try { if (window.speechSynthesis) speechSynthesis.getVoices(); } catch(e){}
     var names = [];
     Object.keys(SAMPLES).forEach(function(k){ SAMPLES[k].forEach(function(n){ if (names.indexOf(n) < 0) names.push(n); }); });
     names.forEach(function(n){
@@ -302,97 +277,38 @@
     if (window.__sfxLog) window.__sfxLog.push('clip:' + name);
     return buf.duration;
   }
-  function speak(text, delay){
-    try {
-      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
-      var u = new SpeechSynthesisUtterance(text);
-      var voices = speechSynthesis.getVoices().filter(function(v){ return /^en/i.test(v.lang); });
-      var bro = voices.filter(function(v){ return /daniel|alex|fred|aaron|arthur|rishi|male|guy|david|mark/i.test(v.name); })[0] || voices[0];
-      if (bro) u.voice = bro;
-      u.pitch = .75; u.rate = .92; u.volume = 1;
-      var go = function(){ try { speechSynthesis.cancel(); speechSynthesis.speak(u); } catch(e){} };
-      if (window.__sfxLog) window.__sfxLog.push('say:' + text);
-      // iPhone and iPad only speak from inside the tap itself, so no delay there.
-      var ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (ios || !delay) go(); else setTimeout(go, delay);
-      return true;
-    } catch(e){ return false; }
-  }
   // Recorded result sounds. Returns false when the clips aren't loaded yet, so the synthesized version plays instead.
-  // Which name callout fits this game, from the KOs each player logged (c: {mode, koCooper, koNathan, logger, handoff}).
-  // Doubles only calls someone out when KOs were tracked (somebody has at least one).
-  function calloutSet(kind, c){
-    if (!c) return null;
-    var other = function(n){ return n === 'cooper' ? 'nathan' : 'cooper'; };
-    var logger = c.logger === 'nathan' ? 'nathan' : 'cooper';
-    if (c.mode !== 'doubles'){
-      if (kind === 'perfect') return 'call:sixsolo:' + logger;
-      if (Math.random() > .7) return null;
-      return 'call:' + (kind === 'loss' ? 'losesolo' : 'winsolo') + ':' + logger;
-    }
-    if (kind === 'perfect') return 'call:sixduo:x';
-    if (c.handoff) return null;
-    var a = Number(c.koCooper) || 0, b = Number(c.koNathan) || 0;
-    if (a + b === 0 || a === b) return null;
-    var top = a > b ? 'cooper' : 'nathan', low = other(top), zero = Math.min(a, b) === 0;
-    if (kind === 'win') return zero && Math.random() < .5 ? 'call:winzero:' + low : 'call:wincarry:' + top;
-    return zero && Math.random() < .7 ? 'call:losezero:' + low : 'call:loseblame:' + low;
-  }
-  function callout(kind, c, at){
-    var set = calloutSet(kind, c);
-    if (window.__sfxLog) window.__sfxLog.push('callout:' + set);
-    if (!set || !SAMPLES[set]) return 0;
-    return sample(pick(set), at, 1.3, .2);
-  }
-
-  // Recorded result sounds. Returns false when the clips aren't loaded yet, so the synthesized version plays instead.
-  function playResult(kind, c){
+  function playResult(kind){
     var t = actx.currentTime + .03;
     if (kind === 'win'){
-      var jingle = pick('winJingle'), voice = pick('winVoice');
-      if (!jingle && !voice) return false;
-      var jd = sample(jingle, t, .8, .25);
-      var vAt = t + (jd ? Math.min(.45, jd * .55) : 0);
-      var vd = sample(voice, vAt, 1.15, .2);
-      if (Math.random() < .5) sample(pick('celebrate'), t + .1, .5, .15);
-      callout('win', c, vAt + vd + .1);
+      // no voice: a jingle, and most of the time a crowd, applause or fireworks under it
+      var jingle = pick('winJingle');
+      if (!jingle) return false;
+      sample(jingle, t, .85, .25);
+      if (Math.random() < .7) sample(pick('celebrate'), t + .08, .55, .15);
       return true;
     }
     if (kind === 'perfect'){
-      var epic = pick('sixVoice');
-      if (!epic) return false;
+      var crowd = pick('sixCrowd');
+      if (!crowd) return false;
       build('perfect', actx, master, t);
-      sample(pick('sixCrowd'), t + .38, .7, .15);
-      var ed = sample(epic, t + .45, 1.35, .35);
-      if (!callout('perfect', c, Math.max(t + 2.3, t + .45 + ed + .25)) && Math.random() < .6) sample(pick('sixAfter'), t + 2.35, 1.1, .3);
+      sample(crowd, t + .38, .75, .15);
       return true;
     }
     if (kind === 'loss'){
-      var r = Math.random();
-      if (r < .12){
-        // sometimes it's just one word, loud, and that's it
-        var f = pick('fword');
-        if (f){ sample(f, t, 1.9, .3); return true; }
-        if (speak('Fuck!', 0)) return true;
-        r = .5;
-      }
-      if (r < .52){
-        // devastating: the doom hit, then one cold word
-        var grim = pick('loseShort');
-        if (!grim) return false;
-        var duck = actx.createGain(); duck.gain.value = .55; duck.connect(master);
+      var say = pick('lossSay');
+      if (!say) return false;
+      if (/fuck/.test(say)){ sample(say, t, 1.9, .3); return true; }
+      if (Math.random() < .5){
+        // the doom hit, then the line
+        var duck = actx.createGain(); duck.gain.value = .5; duck.connect(master);
         build('loss', actx, duck, t);
-        var gd = sample(grim, t + .45, 1.4, .45);
-        if (!callout('loss', c, t + .45 + gd + .15) && Math.random() < .4) sample(pick('heartbeat'), t + 2.1, .9, .3);
-        return true;
+        sample(say, t + .45, 1.5, .4);
+      } else {
+        // a sad sting, then the line
+        var sd = sample(pick('sadSting'), t, .8, .2);
+        sample(say, t + Math.min(sd || 0, 1.0) + .05, 1.5, .25);
       }
-      // roast: a sad sting, then a short heckle
-      var sting = pick('sadSting');
-      if (!sting) return false;
-      var sd = sample(sting, t, .85, .2);
-      var at = t + Math.min(sd, 1.0) + .05;
-      var rd = sample(pick('roastShort'), at, 1.3, .2);
-      callout('loss', c, at + rd + .12);
       return true;
     }
     return false;
