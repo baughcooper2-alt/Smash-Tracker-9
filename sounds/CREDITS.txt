@@ -4,6 +4,9 @@ Smash Tracker sound credits
 The files in this folder were trimmed, loudness-normalized and converted to
 mono MP3 for the app. The original works and their licenses are below.
 
+Loss sounds (loss-gameshow, loss-arcade, loss-wah-wah, loss-sad-trombone, loss-life-lost)
+  Supplied by the tracker's owner. Trimmed and loudness-normalized for the app.
+
 Crowd cheering (six-crowd-cheer.mp3, cel-crowd-roar.mp3, cel-crowd-chant.mp3)
   "Free Crowd Cheering Sounds" by Gregor Quendel
   License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/

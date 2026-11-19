@@ -176,7 +176,8 @@
 
   // ---------- sound ----------
   var actx = null, master = null, noiseBuf = null;
-  function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
+  // A page that sets window.SMASH_SILENT (the phone remote) never makes a sound: the tracker on the computer plays them.
+  function soundOn(){ if (window.SMASH_SILENT) return false; try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function audio(){
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -238,8 +239,8 @@
     winJingle: ['jingle-win-sax02', 'jingle-win-nes12', 'jingle-win-hit11', 'jingle-win-sax10', 'jingle-win-nes08', 'jingle-win-sax12'],
     celebrate: ['cel-crowd-roar', 'cel-crowd-chant', 'cel-applause', 'cel-fireworks'],
     sixCrowd: ['six-crowd-cheer'],
-    // Loss sounds: none for now (new ones coming). Add file names here, e.g. lossSay: ['loss-new'].
-    lossSay: []
+    // Loss sounds: one at random, never the same one twice in a row.
+    lossSay: ['loss-gameshow', 'loss-arcade', 'loss-wah-wah', 'loss-sad-trombone', 'loss-life-lost']
   };
   var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
   var buffers = {}, loading = false, lastPick = {};
@@ -295,9 +296,9 @@
       return true;
     }
     if (kind === 'loss'){
-      // Silent until new loss sounds are added to SAMPLES.lossSay.
       var say = pick('lossSay');
-      if (say) sample(say, t, 1.5, .25);
+      if (!say) return false;
+      sample(say, t, .9, .12);
       return true;
     }
     return false;
