@@ -40,7 +40,7 @@ An installed app keeps its own storage, separate from the browser tab. Open the 
 
 ## Cloud sync and phone remote
 
-Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and portraits live in a Supabase database that every signed-in device reads and writes live. The phone remote (`remote.html`, linked by QR code on the SYNC tab) is a stripped-down controller: pick fighters, count KOs, tap WIN/LOSS, pick stocks. It works even when the tracker is closed. Every device keeps a local copy, so it still works offline and catches up when it reconnects.
+Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and portraits live in a Supabase database that every signed-in device reads and writes live. The phone remote (`remote.html`, linked by QR code on the SYNC tab) has two screens. **LOG GAME**: pick fighters, count KOs, tap WIN/LOSS, pick stocks. **SESSION**: today’s record, win rate, stock diff, streaks, KOs, six-stocks, momentum, your picks, toughest opponents and every game. It works even when the tracker is closed. Every device keeps a local copy, so it still works offline and catches up when it reconnects.
 
 One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without it the tracker works exactly as before, saving on the device only.
 
