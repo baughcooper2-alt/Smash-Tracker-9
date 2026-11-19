@@ -238,9 +238,8 @@
     winJingle: ['jingle-win-sax02', 'jingle-win-nes12', 'jingle-win-hit11', 'jingle-win-sax10', 'jingle-win-nes08', 'jingle-win-sax12'],
     celebrate: ['cel-crowd-roar', 'cel-crowd-chant', 'cel-applause', 'cel-fireworks'],
     sixCrowd: ['six-crowd-cheer'],
-    // Loss sayings (Kokoro TTS, am_fenrir voice). The swears play on their own, nothing under them.
-    lossSay: ['loss-fuck', 'loss-yuck', 'loss-fuck-x5', 'loss-ugh', 'loss-come-on-bro', 'loss-laugh', 'loss-losers', 'loss-how-did-you-lose', 'loss-turn-off-switch'],
-    sadSting: ['sad-trombone', 'jingle-sad-steel07', 'jingle-sad-steel05', 'jingle-sad-steel03']
+    // Loss sounds: none for now (new ones coming). Add file names here, e.g. lossSay: ['loss-new'].
+    lossSay: []
   };
   var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
   var buffers = {}, loading = false, lastPick = {};
@@ -296,19 +295,9 @@
       return true;
     }
     if (kind === 'loss'){
+      // Silent until new loss sounds are added to SAMPLES.lossSay.
       var say = pick('lossSay');
-      if (!say) return false;
-      if (/fuck/.test(say)){ sample(say, t, 1.9, .3); return true; }
-      if (Math.random() < .5){
-        // the doom hit, then the line
-        var duck = actx.createGain(); duck.gain.value = .5; duck.connect(master);
-        build('loss', actx, duck, t);
-        sample(say, t + .45, 1.5, .4);
-      } else {
-        // a sad sting, then the line
-        var sd = sample(pick('sadSting'), t, .8, .2);
-        sample(say, t + Math.min(sd || 0, 1.0) + .05, 1.5, .25);
-      }
+      if (say) sample(say, t, 1.5, .25);
       return true;
     }
     return false;
@@ -530,35 +519,6 @@
       [96, 100, 103, 108].forEach(function(n, i){ tone(c, dest, t + .34 + i * .045, midi(n), .18, {type:'sine', gain:.04}); });
       bells(c, dest, t + .3, .9);
       return .9;
-    }
-    if (kind === 'loss'){
-      // A doom hit: sub drop, metallic clang, and a distorted, dissonant low brass "BRAAAM" that sinks,
-      // an eerie high tritone over it, then a slow, heavy heartbeat.
-      tone(c, dest, t, 85, 1.6, {type:'sine', slideTo:26, gain:.55, attack:.004, release:1.3});
-      noise(c, dest, t, .5, {ftype:'lowpass', freq:220, gain:.3, wet:.4});
-      [211, 317, 486, 733, 1109].forEach(function(f, i){
-        tone(c, dest, t, f, 1.4 - i * .15, {type:'sine', gain:.05 - i * .007, attack:.002, release:1.1, sustain:.3, wet:.9});
-      });
-      var shaper = distortion(c, 3), lp = c.createBiquadFilter(), bg = c.createGain();
-      lp.type = 'lowpass'; lp.Q.value = 2;
-      lp.frequency.setValueAtTime(140, t); lp.frequency.exponentialRampToValueAtTime(1300, t + .35); lp.frequency.exponentialRampToValueAtTime(260, t + 2.6);
-      bg.gain.setValueAtTime(.0001, t); bg.gain.exponentialRampToValueAtTime(.2, t + .12);
-      bg.gain.setValueAtTime(.2, t + 1.4); bg.gain.exponentialRampToValueAtTime(.0001, t + 2.8);
-      shaper.connect(lp); lp.connect(bg); bg.connect(dest); send(c, bg, .55);
-      [[24, -10], [36, 8], [37, -6], [43, 12], [48, -4]].forEach(function(v){
-        var osc = c.createOscillator();
-        osc.type = 'sawtooth'; osc.detune.value = v[1];
-        osc.frequency.setValueAtTime(midi(v[0]), t);
-        osc.frequency.setValueAtTime(midi(v[0]), t + .9);
-        osc.frequency.exponentialRampToValueAtTime(midi(v[0] - 2), t + 2.7);
-        osc.connect(shaper); osc.start(t); osc.stop(t + 2.85);
-      });
-      tone(c, dest, t + .25, midi(78), 2.3, {type:'sine', gain:.022, attack:.6, release:1.2, vibrato:3.2, vibDepth:.012, wet:.9});
-      tone(c, dest, t + .25, midi(72), 2.3, {type:'sine', gain:.022, attack:.6, release:1.2, vibrato:2.7, vibDepth:.012, wet:.9});
-      [1.75, 1.95, 2.75, 2.95].forEach(function(d, i){
-        tone(c, dest, t + d, i % 2 ? 48 : 58, .32, {type:'sine', slideTo:30, gain:i % 2 ? .3 : .42, attack:.004, release:.28});
-      });
-      return 3.4;
     }
     if (kind !== 'perfect') return 0;
     // Six-stock / flawless: a cinematic victory. Reverse swell into a huge impact, timpani under wide brass

@@ -4,11 +4,6 @@ Smash Tracker sound credits
 The files in this folder were trimmed, loudness-normalized and converted to
 mono MP3 for the app. The original works and their licenses are below.
 
-Loss lines (loss-*.mp3)
-  Generated with Kokoro-82M text-to-speech (voice "am_fenrir")
-  Model license: Apache 2.0  https://huggingface.co/hexgrad/Kokoro-82M
-  ONNX build: https://huggingface.co/fastrtc/kokoro-onnx (MIT)
-
 Crowd cheering (six-crowd-cheer.mp3, cel-crowd-roar.mp3, cel-crowd-chant.mp3)
   "Free Crowd Cheering Sounds" by Gregor Quendel
   License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
@@ -23,12 +18,8 @@ Fireworks with applause (cel-fireworks.mp3)
   "Fireworks With Applause Happy People" by Almitory (used under its CC0 option)
   License: CC0  https://opengameart.org/content/fireworks-with-applause-happy-people
 
-Jingles (jingle-win-*, jingle-sad-* files)
+Jingles (jingle-win-* files)
   "85 Short music jingles" by Kenney (www.kenney.nl)
   License: CC0  https://opengameart.org/content/85-short-music-jingles
-
-Sad trombone (sad-trombone.mp3)
-  "Game Over Trumpet SFX" by 0new4y
-  License: CC0  https://opengameart.org/content/game-over-trumpet-sfx
 
 All other sounds are synthesized in fx.js.
