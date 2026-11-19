@@ -205,6 +205,9 @@
 
   P.start = function(){
     var self = this;
+    // Ask the browser to never clear this site's saved data on its own (Safari and Chrome may otherwise
+    // wipe a site's storage after a while without visits).
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){}); } catch(e){}
     return loadConfig().then(function(res){
       var cfg = res.cfg;
       if (!cfg) return self.status({phase:'unconfigured', msg:res.why || ''});

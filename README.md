@@ -32,6 +32,12 @@ Then visit `http://localhost:8000`.
 
 Once served over `http`/`https`, most browsers will offer an "Install" or "Add to Home Screen" option, using the icon and metadata from [manifest.webmanifest](manifest.webmanifest).
 
+- **iPhone / iPad:** open the site in Safari → Share → **Add to Home Screen**.
+- **Mac (Safari):** File → **Add to Dock**.
+- **Mac (Chrome):** the install icon at the right of the address bar, or ⋮ → Cast, save, and share → **Install page as app**.
+
+An installed app keeps its own storage, separate from the browser tab. Open the app once, go to **SYNC** and sign in; after that it loads your data from the cloud every time, with no restoring from backups.
+
 ## Cloud sync and phone remote
 
 Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and portraits live in a Supabase database that every signed-in device reads and writes live. The phone remote (`remote.html`, linked by QR code on the SYNC tab) is a stripped-down controller: pick fighters, count KOs, tap WIN/LOSS, pick stocks. It works even when the tracker is closed. Every device keeps a local copy, so it still works offline and catches up when it reconnects.
