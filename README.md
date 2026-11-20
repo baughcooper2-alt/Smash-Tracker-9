@@ -44,6 +44,10 @@ Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and 
 
 One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without it the tracker works exactly as before, saving on the device only.
 
+## Home page
+
+Home shows a **Top 10 for each player** — Cooper (his own fighter in every game) and Nathan (his doubles picks plus any 1v1 where he's tagged as the rival), ranked by wins. The **ALL / 1V1 / 2V2** switch filters both boards, and tapping a fighter opens its breakdown.
+
 ## Shortcuts and effects
 
 - Keys **1**–**7** switch tabs. **W** or **L** starts logging a win or loss. Then a number picks the stocks (**0** skips) and **Esc** cancels.

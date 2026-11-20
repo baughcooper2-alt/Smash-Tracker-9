@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Smash Remote</title>
-<meta name="theme-color" content="#14532d">
+<meta name="theme-color" content="#f5f6f3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -227,6 +227,56 @@
     font-family:'Archivo Black', Archivo, sans-serif; font-size:13px; letter-spacing:.1em; white-space:nowrap; animation:pop .18s ease; pointer-events:none; }
   .hide { display:none !important; }
   @media (prefers-reduced-motion:reduce){ *{animation:none !important; transition:none !important} }
+</style>
+<style id="clean-ui">
+  /* Clean UI pass: matches the tracker's soft cards, hairline borders and light header. */
+  :root { --paper:#ffffff; --bg:#f5f6f3; --line:1px solid rgba(23,20,15,.09); --hair:rgba(23,20,15,.09);
+    --sh:0 1px 2px rgba(16,24,40,.04),0 8px 24px -12px rgba(16,24,40,.12); --muted:rgba(23,20,15,.55); }
+  body { background-image:none; font-variant-numeric:tabular-nums; }
+  .blk, .fbtn .nm b, .tile b, .stk button, .toast, .pills button { font-family:Archivo, -apple-system, sans-serif !important; font-weight:800; }
+  header { background:rgba(245,246,243,.9); color:var(--ink); box-shadow:none; border-bottom:1px solid rgba(23,20,15,.07);
+    -webkit-backdrop-filter:saturate(180%) blur(16px); backdrop-filter:saturate(180%) blur(16px); }
+  header .pill { background:#fff; border:1px solid rgba(23,20,15,.1); }
+  .logo { border:none; border-radius:10px; background:linear-gradient(145deg,#ec4b57,#c41f31); box-shadow:0 6px 14px -6px rgba(212,40,58,.7); }
+  .logo::before { display:none; }
+  .title { letter-spacing:-.02em; text-transform:none; }
+  .today .lbl { color:var(--muted); }
+  .card { border:1px solid rgba(23,20,15,.08); border-radius:18px; box-shadow:var(--sh); }
+  .banner { border:var(--line); border-radius:14px; }
+  .banner button, .undo { border:1px solid rgba(23,20,15,.14); border-radius:10px; }
+  .seg { background:rgba(23,20,15,.06); }
+  .seg button.on { background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(16,24,40,.12); }
+  .fbtn { background:#f6f7f4; border:1px solid var(--hair); border-radius:14px; }
+  .chip { border:none; box-shadow:inset 0 0 0 1px rgba(23,20,15,.08); text-shadow:0 1px 1px rgba(23,20,15,.3); }
+  .ko button { background:#f6f7f4; border:1px solid var(--hair); }
+  .ko button.plus { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .big { border:none; border-radius:22px; box-shadow:0 14px 30px -14px rgba(16,24,40,.45); }
+  .big:active { transform:translateY(1px) scale(.99); box-shadow:0 4px 10px -4px rgba(16,24,40,.35); }
+  .big.win { background:linear-gradient(160deg,#2bb06a,#1a8049); }
+  .big.loss { background:linear-gradient(160deg,#ec4b57,#c41f31); }
+  .hero { background:linear-gradient(135deg,#2f80e8,#1a5ec4); box-shadow:0 18px 40px -18px rgba(26,94,196,.7); border-radius:20px; }
+  .hero .lbl { color:rgba(255,255,255,.75); }
+  .hero .rec .w { color:#fff; } .hero .rec .l { color:rgba(255,255,255,.65); }
+  .tile2 { border:var(--line); border-radius:16px; box-shadow:var(--sh); }
+  .dots .P { box-shadow:none; }
+  .pills button { border:1px solid rgba(23,20,15,.12); background:#fff; font-weight:700 !important; }
+  .pills button.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+  nav.tabs { left:12px; right:12px; bottom:calc(10px + env(safe-area-inset-bottom)); padding:5px; border-radius:18px;
+    background:rgba(236,238,233,.9); border:1px solid rgba(23,20,15,.08); box-shadow:0 12px 32px -12px rgba(16,24,40,.35); }
+  nav.tabs button { height:46px; border-radius:13px; }
+  nav.tabs button.on { background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(16,24,40,.12); }
+  .pair input, .picker .srch input { background:#fff; border:1px solid rgba(23,20,15,.14); border-radius:12px; }
+  .pair input:focus, .picker .srch input:focus { outline:none; border-color:rgba(31,111,208,.55); box-shadow:0 0 0 4px rgba(31,111,208,.14); }
+  .pair .err { border:1px solid rgba(212,40,58,.3); }
+  .go { border:none; border-radius:14px; }
+  .pair .alt, .sheet .row2 button { border:1px solid rgba(23,20,15,.12); border-radius:14px; }
+  .stk button { border:1px solid rgba(23,20,15,.1); box-shadow:0 1px 2px rgba(16,24,40,.06); }
+  .stk button:active { transform:scale(.97); }
+  .picker .ph { background:var(--bg); color:var(--ink); border-bottom:1px solid rgba(23,20,15,.07); }
+  .picker .x { background:rgba(23,20,15,.06); color:var(--ink); }
+  .tile { border:1px solid var(--hair); box-shadow:0 1px 2px rgba(16,24,40,.04); }
+  .tile.on { background:#fff8e6; border-color:rgba(201,150,30,.5); box-shadow:0 0 0 2px rgba(242,193,78,.5); }
+  .toast { background:rgba(23,20,15,.92); color:#fff; border-radius:14px; letter-spacing:.06em; font-weight:700 !important; }
 </style>
 </head>
 <body>
