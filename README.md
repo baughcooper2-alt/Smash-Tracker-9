@@ -48,6 +48,10 @@ One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without 
 
 Home shows a **Top 10 for each player** — Cooper (his own fighter in every game) and Nathan (his doubles picks plus any 1v1 where he's tagged as the rival), ranked by wins. The **ALL / 1V1 / 2V2** switch filters both boards, and tapping a fighter opens its breakdown.
 
+## Character select (computer)
+
+On a computer (any window 900px or wider), tapping a fighter slot on **SESSION** opens a full-screen character select modeled on Smash Ultimate's: portrait squares in the game's roster order (DLC before the Miis, with a **?** Random square at the end), and a player card for each slot along the bottom. Picks go in order: **P1 Cooper → P2 Nathan → CPU → CPU** (1v1 is P1 Cooper → the opponent, labeled with the tagged rival if there is one). Each pick moves on to the next card; click any card to jump back to it. Hovering a square previews it on the active card, and P1 / P2 / CPU badges mark who's on which fighter. Type to search, **Enter** picks the highlighted match (or closes when the search box is empty), **Tab** switches cards, **Esc** closes. Phones keep the original pop-up picker.
+
 ## Shortcuts and effects
 
 - Keys **1**–**7** switch tabs. **W** or **L** starts logging a win or loss. Then a number picks the stocks (**0** skips) and **Esc** cancels.
