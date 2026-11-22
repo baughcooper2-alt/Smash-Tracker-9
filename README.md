@@ -72,7 +72,18 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
 
 ## Achievements
 
-27 achievements on **STATS**, from First Blood to Centurion (100 wins), Hat Trick (three six-stocks in a day), Comeback Kids (3 straight wins right after losing 5 straight), Night Owl, Dynamic Duo and more. Each shows its progress (like 76 / 100). They're worked out from your games, so they're the same on every device. Each device remembers which ones it has already shown, and the first time a device opens this version it counts what you already have as seen instead of popping them all up.
+100 achievements on **STATS**, in bronze, silver, gold and platinum tiers, across ten categories: wins, streaks, six-stocks, fighters, duos, KOs, sessions, stages and items, challenges, and fun ones (Night Owl, Humbled, Smashmas). Some examples: Centurion (100 wins), Untouchable (30 wins in a row), Hat Trick (three six-stocks in a day), Twinning (win a 2v2 with both of you on the same fighter), Solo Carry (Cooper gets every team KO in a win), Perfect Night (a 10+ game day with no losses) and Board Cleared (finish every challenge in a week). Each one shows its progress (like 49 / 50). **UP NEXT** lists the ones you're closest to, **UNLOCKED** lists what you've earned, and the category chips filter the rest. Achievements are worked out from your games, so they're the same on every device. Each device remembers which ones it has already shown. When a new version adds achievements, the ones you'd already earned are marked as seen, with a single "new achievements" note instead of a pop-up for each.
+
+## Challenges
+
+**Challenges** on Home is a weekly board of six, built around fighters and duos you never touch:
+- two fighters for Cooper and two for Nathan that they've never (or hardly ever) played, each needing one win (★)
+- a duo you've never run together, needing two wins (★★)
+- one bonus (★★★): both of you on the same fighter, three wins with a fighter Cooper rarely uses, a blowout win with one, or beating your nemesis opponent twice
+
+**PLAY IT** loads that challenge's fighters (switching to 2v2 when it needs Nathan) and opens **SESSION**. Cards light up green when a win with your current setup would count, and the Session tab has a short list of open challenges. Finishing one shows **CHALLENGE COMPLETE** with a commentator line. Completed challenges and stars are saved and synced, and they count toward the challenge achievements.
+
+A new board arrives every Monday, announced with "A NEW CHALLENGER APPROACHES!". It's the same on every device, since it's built from the week and the games played before it started. **⟳ SHUFFLE** (tap twice) swaps in a new set; progress on unfinished challenges restarts from that moment, and completed ones stay completed.
 
 ## Fighter profiles
 
