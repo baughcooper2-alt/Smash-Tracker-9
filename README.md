@@ -80,5 +80,6 @@ Every fighter has a full profile page: a big portrait, record and win rate on yo
 
 ## Stats additions
 
+- **Chart periods:** the three over-time charts each have their own switch. **Stock Margin** and **KOs** can show **GAME** (every game), **DAY**, **WEEK** (starting Monday) or **MONTH**. **Win Rate** can show **DAY**, **WEEK** or **MONTH**. Grouped views show the average stock margin per game, the win rate, or KOs per game for each period, and hovering a point shows its record and game count. Each device remembers your choice.
 - **Prime time:** a heatmap of win rate by day of the week and time of day (3-hour blocks), with day and time totals and a line naming your best and worst slots. Red means losing, grey is 50%, green is winning. Every cell shows its number, and hovering a cell shows the record and stock diff. Cells with fewer than 3 games are faded.
 - **Clutch factor:** your record in close games (decided by about a third of the stocks or less: 1 stock in 3-stock 1v1, 1–2 in 2v2), solid wins and blowouts (two thirds or more), a verdict (**CLUTCH**, **STEADY** or **SHAKY**) comparing close games with your overall rate, and your most clutch fighters.
