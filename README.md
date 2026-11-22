@@ -54,7 +54,31 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
 
 ## Shortcuts and effects
 
-- Keys **1**–**7** switch tabs. **W** or **L** starts logging a win or loss. Then a number picks the stocks (**0** skips) and **Esc** cancels.
-- Logging a game plays an animation: confetti for a win, a shake for a loss, and a bigger gold celebration for a flawless win (a six-stock in 3-stock 2v2, a three-stock in 1v1). Flawless games are gold in the match log and counted as **SIX-STOCKS** on Home and Stats.
-- Each result has a sound. Wins: a jingle, usually with a crowd, applause or fireworks. Six-stocks: a cinematic fanfare with a crowd going wild. Losses: a random one of five sounds (game-show buzzer, arcade lose, wah-wah, sad trombone, life lost), never the same twice in a row. Result and interface sounds only play on the tracker: a game logged on the phone remote plays its sound on the computer, and the phone stays silent. Tabs, buttons, KO counters, the fighter picker and random rolls have short, quiet interface sounds too. The **🔊 SOUND** button in the header turns all of it off. On iPhone, the ring/silent switch also mutes them. Sound credits and licenses are in [sounds/CREDITS.txt](sounds/CREDITS.txt).
+- Keys **1**–**7** switch tabs. **W** or **L** starts logging a win or loss. Then a number picks the stocks (**0** skips) and **Esc** cancels. **R** sets up a rematch of the last game, **Y** opens the year in review.
+- Logging a game plays a Smash-style results screen: a **GAME!** slash, then both teams' portraits with the winners lit up in gold and the losers greyed out. Confetti for a win, a shake for a loss, and a bigger gold celebration for a flawless win (a six-stock in 3-stock 2v2, a three-stock in 1v1). Flawless games are gold in the match log and counted as **SIX-STOCKS** on Home and Stats. The phone remote shows the same results screen.
+- Each result has a recorded sound, never the same one twice in a row. Wins: one of eight victory jingles and fanfares (orchestral, chiptune, sax), the short ones with a crowd, applause or fireworks under them. Six-stocks: a big fanfare (Hyper-Ultra-Fanfare or a title-bout fanfare) with a stadium crowd going wild. Losses: one of eight (game-show buzzer, arcade lose, wah-wah, sad trombone, life lost, game-over trumpet, a lost-bout sting, a fail sound).
+- A **commentator** reacts to each game with a quick line, with the music ducking under it. What it says depends on how the game went: a six-stock ("Six stock! Somebody call the police!"), a blowout win ("Cooper, you're cooking!"), a close win ("Ugly, but it counts."), a close loss ("So close! Run it back."), a bad loss ("Come on Cooper, what was that?"), and streaks of 3, 5, 7, 10 or 15 ("He's on fire!" / "Three straight losses. Take a breather."). Doubles games add lines for Nathan. A game handed off to Nathan gets no commentary. The **🎙** button in the header switches between two voices (**HER** and **HIM**) or turns it **OFF**. The 60+ lines were generated with the open-source Kokoro text-to-speech model and live in [sounds/voice/](sounds/voice/). Result and interface sounds only play on the tracker: a game logged on the phone remote plays its sound on the computer, and the phone stays silent. Tabs, buttons, KO counters, the fighter picker and random rolls have short, quiet interface sounds too. The **🔊 SOUND** button in the header turns all of it off. On iPhone, the ring/silent switch also mutes them. Sound credits and licenses are in [sounds/CREDITS.txt](sounds/CREDITS.txt).
+- Achievements pop up at the top of the screen when you unlock one (after the results screen).
 - The snow can be turned off with the **SNOW** button in the header (or **SNOW OFF** at the bottom of the phone remote).
+
+## Session extras
+
+- **Momentum** bar under today's record: a marker that slides toward **ON FIRE** or **ICE COLD** based on today's last 8 games, with newer games and bigger stock margins counting more.
+- **↻ REMATCH** strip (tracker and phone remote): shows the last game, and its **WIN** / **LOSS** buttons put that game's exact setup back (mode, all four fighters, stage, items, stocks, rival) and go straight to the stock prompt.
+
+## Year in review
+
+**★ YEAR IN REVIEW** on Home (or **Y**) opens story-style cards for the year: games and record, Cooper's and Nathan's mains, best duo, best month, longest win streak, six-stocks, your nemesis and favorite victim, biggest night, prime time, clutch factor and achievements, ending with a summary you can copy. Cards advance on their own every 6 seconds. Tap the right side (or **→**) to go forward, the left side (or **←**) to go back, **Esc** to close. If you've played across more than one year, year chips at the bottom switch between them.
+
+## Achievements
+
+27 achievements on **STATS**, from First Blood to Centurion (100 wins), Hat Trick (three six-stocks in a day), Comeback Kids (3 straight wins right after losing 5 straight), Night Owl, Dynamic Duo and more. Each shows its progress (like 76 / 100). They're worked out from your games, so they're the same on every device. Each device remembers which ones it has already shown, and the first time a device opens this version it counts what you already have as seen instead of popping them all up.
+
+## Fighter profiles
+
+Every fighter has a full profile page: a big portrait, record and win rate on your side, first and last time played, the last 20 games as a form strip, Cooper / Nathan / 1v1 / 2v2 splits, best teammate, best stage, nemesis (worst losing matchup), favorite victim, its record when it's on the other side, close-game record, six-stocks and Cooper's KOs per game. Open one from **FULL FIGHTER PROFILE** in a Top 10 fighter's breakdown, **PROFILE ▸** on the Roster tab, a row in Stats' Fighter Breakdown, or a clutch fighter. **◀ / ▶** (or the arrow keys) step through every fighter you've played.
+
+## Stats additions
+
+- **Prime time:** a heatmap of win rate by day of the week and time of day (3-hour blocks), with day and time totals and a line naming your best and worst slots. Red means losing, grey is 50%, green is winning. Every cell shows its number, and hovering a cell shows the record and stock diff. Cells with fewer than 3 games are faded.
+- **Clutch factor:** your record in close games (decided by about a third of the stocks or less: 1 stock in 3-stock 1v1, 1–2 in 2v2), solid wins and blowouts (two thirds or more), a verdict (**CLUTCH**, **STEADY** or **SHAKY**) comparing close games with your overall rate, and your most clutch fighters.

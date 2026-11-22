@@ -103,6 +103,14 @@
   .big.win { background:linear-gradient(160deg,#27a862,var(--green)); }
   .big.loss { background:linear-gradient(160deg,#e23a4c,var(--red)); }
 
+  /* rematch: last game's setup, logged in one tap */
+  .rm { display:flex; align-items:center; gap:10px; padding:10px; border-left:6px solid var(--ink); }
+  .rm .t span:first-child { font-family:'Archivo Black', Archivo, sans-serif; font-size:12px; letter-spacing:.06em; }
+  .rm .t span + span { font-size:11.5px !important; font-weight:700 !important; letter-spacing:0 !important; opacity:.8 !important; }
+  .rm button { flex:none; width:64px; height:48px; border:2.5px solid var(--ink); border-radius:12px; color:var(--paper); font-size:13px; letter-spacing:.06em; box-shadow:2px 2px 0 var(--ink); }
+  .rm button:active { transform:translate(2px,2px); box-shadow:none; }
+  .rm button.w { background:var(--green); } .rm button.l { background:var(--red); }
+
   /* last game strip */
   .last { display:flex; align-items:center; gap:10px; padding:9px 10px; }
   .g { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:12px; }
@@ -489,6 +497,10 @@
     var last = D.matches[D.matches.length - 1];
     var today = todayMatches();
     if (last && today.length && today[today.length - 1].id === last.id) out += '<div class="card" style="padding:8px">'+gameRow(last, true)+'</div>';
+    if (last && Date.now() - last.ts < 18 * 3600 * 1000){
+      out += '<div class="card rm"><span class="t"><span>\u21bb REMATCH</span><span>'+esc(matchLine(last))+'</span></span>' +
+        '<button class="blk w" data-act="rematch" data-v="W">WIN</button><button class="blk l" data-act="rematch" data-v="L">LOSS</button></div>';
+    }
 
     var stage = get('stage'), items = !!get('items'), stocks = Number(get('stocks')) || 3;
     var stageName = (STAGES.filter(function(s){ return s.id === stage; })[0] || STAGES[0]).label;
@@ -710,16 +722,28 @@
       var p = {}; p[k] = v; setKv(p); buzz(15);
     },
     result: function(el){ S.pending = el.dataset.v; buzz(); drawSheet(); },
+    rematch: function(el){
+      var m = D.matches[D.matches.length - 1];
+      if (!m) return;
+      var sw = !!get('handoffOn'), p = {mode:m.mode, stage:m.stage || 'omega', items:!!m.items, stocks:m.stocks || Number(get('stocks')) || 3,
+        vsPlayer:m.vs || '', me: sw ? m.opp1 : m.me, opp1: sw ? m.me : m.opp1, koMe:0, koNathan:0};
+      if (m.mode === 'doubles'){ p.partner = sw ? m.opp2 : m.partner; p.opp2 = sw ? m.partner : m.opp2; }
+      setKv(p);
+      S.pending = el.dataset.v; buzz(); drawSheet();
+    },
     cancel: function(){ S.pending = null; drawSheet(); },
     stock: function(el){
       var result = S.pending;
       if (!result) return;
       S.pending = null;
       var margin = Number(el.dataset.v) || 0, mode = get('mode'), stocks = Number(get('stocks')) || 3;
+      var setup = {me:get('me'), partner:get('partner'), opp1:get('opp1'), opp2:get('opp2')}, dubsNow = mode === 'doubles';
       logGame(result, margin);
+      var fx = function(id){ if (!id || !S.byId[id]) return null; var img = D.kv['img:' + id]; return {name:nameOf(id), color:colorOf(id), img: typeof img === 'string' && /^data:image\//.test(img) ? img : ''}; };
+      var teams = {left:[fx(setup.me), dubsNow ? fx(setup.partner) : null].filter(Boolean), right:[fx(setup.opp1), dubsNow ? fx(setup.opp2) : null].filter(Boolean), winner: result === 'W' ? 'left' : 'right'};
       var flawless = result === 'W' && margin >= fullStocks(mode, stocks);
       toast((flawless ? '\u2605 ' + perfectWord(mode, stocks) : result === 'W' ? 'WIN' : 'LOSS') + ' LOGGED' + (S.sync.phase === 'offline' ? ' — WILL SYNC' : ''));
-      if (window.SmashFX) window.SmashFX.result({kind: flawless ? 'perfect' : result === 'W' ? 'win' : 'loss',
+      if (window.SmashFX) window.SmashFX.result({teams: teams, shakeTarget: 'main', kind: flawless ? 'perfect' : result === 'W' ? 'win' : 'loss',
         title: flawless ? perfectWord(mode, stocks) + '!' : result === 'W' ? 'WIN!' : 'LOSS',
         sub: flawless ? (mode === 'doubles' ? 'FLAWLESS · NOBODY DIED' : 'FLAWLESS · NO STOCKS LOST') : result === 'W' ? (margin ? 'WON BY ' + margin : 'GG') : (margin ? 'DOWN ' + margin : 'SHAKE IT OFF')});
       else buzz([30, 40, 30]);

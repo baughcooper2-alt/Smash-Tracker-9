@@ -4,8 +4,50 @@ Smash Tracker sound credits
 The files in this folder were trimmed, loudness-normalized and converted to
 mono MP3 for the app. The original works and their licenses are below.
 
-Loss sounds (loss-gameshow, loss-arcade, loss-wah-wah, loss-sad-trombone, loss-life-lost)
-  Supplied by the tracker's owner. Trimmed and loudness-normalized for the app.
+WIN SOUNDS
+----------
+win-orchestral.mp3
+  "Won! (Orchestral winning jingle)" by spuispuin
+  License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
+  https://opengameart.org/content/won-orchestral-winning-jingle
+
+win-victory-bout.mp3  (and loss-lose-bout.mp3, six-champion.mp3 below)
+  "Fanfares" by Spring Spring (VICTORY.ogg)
+  License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
+  https://opengameart.org/content/fanfares
+
+win-fanfare-lick.mp3
+  "Classic fanfare lick" by fvcalderan
+  License: CC0  https://opengameart.org/content/classic-fanfare-lick
+
+win-winner-is.mp3
+  "And the winner is" by congusbongus
+  License: CC0  https://opengameart.org/content/and-the-winner-is
+
+win-flag.mp3
+  "Victory" by Musheran
+  License: CC0  https://opengameart.org/content/victory-6
+
+win-success.mp3
+  "Win sound effect" by Listener
+  License: CC0  https://opengameart.org/content/win-sound-effect
+  Cut to the first 3 seconds with a fade.
+
+jingle-win-sax02.mp3, jingle-win-hit11.mp3
+  "85 Short music jingles" by Kenney (www.kenney.nl)
+  License: CC0  https://opengameart.org/content/85-short-music-jingles
+
+SIX-STOCK SOUNDS
+----------------
+six-hyper-fanfare.mp3
+  "Hyper-Ultra-Fanfare" by Zane Little Music
+  License: CC0  https://opengameart.org/content/hyper-ultra-fanfare
+
+six-champion.mp3
+  "Fanfares" by Spring Spring (WIN_AGAINST_CHAMPION.ogg)
+  License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
+  https://opengameart.org/content/fanfares
+  Cut to 7.5 seconds with a fade.
 
 Crowd cheering (six-crowd-cheer.mp3, cel-crowd-roar.mp3, cel-crowd-chant.mp3)
   "Free Crowd Cheering Sounds" by Gregor Quendel
@@ -21,8 +63,31 @@ Fireworks with applause (cel-fireworks.mp3)
   "Fireworks With Applause Happy People" by Almitory (used under its CC0 option)
   License: CC0  https://opengameart.org/content/fireworks-with-applause-happy-people
 
-Jingles (jingle-win-* files)
-  "85 Short music jingles" by Kenney (www.kenney.nl)
-  License: CC0  https://opengameart.org/content/85-short-music-jingles
+LOSS SOUNDS
+-----------
+loss-gameshow, loss-arcade, loss-wah-wah, loss-sad-trombone, loss-life-lost
+  Supplied by the tracker's owner. Trimmed and loudness-normalized for the app.
+
+loss-trumpet.mp3
+  "Game Over Trumpet SFX" by 0new4y
+  License: CC0  https://opengameart.org/content/game-over-trumpet-sfx
+
+loss-lose-bout.mp3
+  "Fanfares" by Spring Spring (LOSE.ogg)
+  License: CC BY 4.0  https://creativecommons.org/licenses/by/4.0/
+  https://opengameart.org/content/fanfares
+
+loss-failed.mp3
+  "UI Failed or Error" by ViRiX
+  License: CC BY 3.0  https://creativecommons.org/licenses/by/3.0/
+  https://opengameart.org/content/ui-failed-or-error
+  Cut to 2.6 seconds with a fade.
+
+COMMENTATOR VOICE (voice/)
+--------------------------
+The quips in voice/ were generated for this app with the open-source Kokoro-82M
+text-to-speech model (Apache 2.0, https://huggingface.co/hexgrad/Kokoro-82M), using
+its "Heart" (vo-heart-*) and "Michael" (vo-michael-*) voices. Every clip was checked
+with speech recognition to make sure it says what it should.
 
 All other sounds are synthesized in fx.js.

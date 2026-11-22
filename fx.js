@@ -2,7 +2,10 @@
 //   SmashFX.result({kind:'win'|'loss'|'perfect', title, sub})  full-screen result animation
 //   SmashFX.snow(on)                                             falling snow behind everything clickable
 //   SmashFX.soundOn() / SmashFX.setSound(on)                     sound effects on or off (saved per device)
-// Sounds are synthesized with Web Audio: no audio files to load.
+//   SmashFX.voice() / SmashFX.setVoice('heart'|'michael'|'off')  commentator voice quips (saved per device)
+// result() also takes quip:'six'|'stomp'|'closeW'|'closeL'|'bad'|'win'|'loss'|'hotW'|'coldL', duo:true for 2v2,
+// and teams:{left:[{name,img,color}], right:[...], winner:'left'|'right'} for the GAME! results screen.
+// Result sounds are recorded clips in sounds/ (credits in sounds/CREDITS.txt); interface sounds are synthesized.
 (function(){
   'use strict';
   if (window.SmashFX) return;
@@ -42,7 +45,33 @@
     '@keyframes fxrFade{to{opacity:0}}',
     '@keyframes fxrSpin{from{transform:rotate(0) scale(.6)}to{transform:rotate(60deg) scale(1)}}',
     '@keyframes fxrShine{from{background-position:120% 0}to{background-position:-130% 0}}',
-    '#fx-snow{position:fixed;inset:0;z-index:40;pointer-events:none}'
+    '#fx-snow{position:fixed;inset:0;z-index:40;pointer-events:none}',
+    /* GAME! splash, then the results screen with both teams */
+    '#fxr .game{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:clamp(80px,19vw,230px);line-height:1;font-style:italic;color:#fffdf7;-webkit-text-stroke:4px #17140f;paint-order:stroke fill;text-shadow:9px 9px 0 #d4283a;animation:fxrGame .8s cubic-bezier(.2,.9,.3,1.2) both}',
+    '#fxr .slash{position:absolute;left:-10%;right:-10%;top:50%;height:clamp(120px,24vw,260px);margin-top:calc(clamp(120px,24vw,260px) / -2);background:#17140f;transform:skewY(-6deg);animation:fxrSlash .8s ease both}',
+    '#fxr .res{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}',
+    /* the results screen stays up longer, so its backdrop does too, with a dark wash so the cards read on any page */
+    '#fxr.teams .bg{background-color:rgba(12,10,8,.55);animation-name:fxrFlashLong;animation-duration:3.1s}',
+    '#fxr.teams.loss .bg{background-color:rgba(12,10,8,.62);animation-duration:3s}',
+    '#fxr.teams.perfect .bg{animation-duration:4.8s}',
+    '#fxr.teams .t{font-size:clamp(46px,10vw,110px)}',
+    '#fxr.teams.win .t,#fxr.teams.win .s{animation-name:fxrSlam,fxrFade;animation-duration:.55s,.4s;animation-delay:0s,1.75s}',
+    '#fxr.teams.win .s{animation-name:fxrUp,fxrFade;animation-delay:.2s,1.75s}',
+    '#fxr.teams.loss .t{animation:fxrUp .35s ease both,fxrFade .4s ease 1.6s forwards}',
+    '#fxr.teams.loss .s{animation:fxrUp .35s ease .15s both,fxrFade .4s ease 1.6s forwards}',
+    '#fxr.teams.perfect .t{animation:fxrSlamBig .7s cubic-bezier(.2,.9,.3,1.3) both,fxrShine 1.1s linear .6s 2,fxrFade .45s ease 2.7s forwards}',
+    '#fxr.teams.perfect .s,#fxr.teams.perfect .crown{animation-delay:.45s,2.7s}',
+    '#fxr .fxr-tm{position:relative;display:flex;align-items:center;justify-content:center;gap:clamp(10px,3vw,34px);padding:0 14px;animation:fxrUp .4s ease .1s both,fxrFade .4s ease var(--out,1.75s) forwards}',
+    '#fxr .fxr-side{flex-direction:row;display:flex;gap:clamp(6px,1.2vw,12px);position:relative}',
+    '#fxr .fxr-side .fxr-tag{position:absolute;left:50%;top:-14px;transform:translateX(-50%);z-index:2;padding:3px 10px;border-radius:999px;font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:11px;letter-spacing:.2em;background:#f2c14e;color:#17140f;border:2px solid #17140f;white-space:nowrap}',
+    '#fxr .fxr-card{width:clamp(76px,13vw,150px);display:flex;flex-direction:column;align-items:center;gap:6px}',
+    '#fxr .fxr-pic{width:100%;aspect-ratio:1;border-radius:16px;border:3px solid #fffdf7;box-shadow:0 10px 26px -8px rgba(0,0,0,.6);background-size:contain;background-repeat:no-repeat;background-position:center;display:flex;align-items:center;justify-content:center;font-size:clamp(30px,6vw,60px);color:#fff}',
+    '#fxr .fxr-nm{max-width:100%;padding:3px 9px;border-radius:8px;background:#17140f;color:#fffdf7;font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:clamp(10px,1.4vw,14px);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '#fxr .fxr-side.won .fxr-pic{border-color:#f2c14e;box-shadow:0 0 0 3px #17140f,0 0 30px rgba(242,193,78,.85)}',
+    '#fxr .fxr-side.lost{filter:grayscale(.85) brightness(.75);transform:scale(.9)}',
+    '#fxr .fxr-vs{font-size:clamp(20px,3.4vw,36px);color:#fffdf7;-webkit-text-stroke:2px #17140f;paint-order:stroke fill}',
+    '@keyframes fxrGame{0%{transform:translateY(-50%) scale(2.6) rotate(-8deg);opacity:0}35%{transform:translateY(-50%) scale(.94) rotate(-4deg);opacity:1}50%{transform:translateY(-50%) scale(1.03) rotate(-4deg)}82%{opacity:1}100%{transform:translateY(-50%) scale(1.12) rotate(-4deg);opacity:0}}',
+    '@keyframes fxrSlash{0%{transform:skewY(-6deg) scaleX(0);opacity:.9}30%{transform:skewY(-6deg) scaleX(1)}80%{opacity:.9}100%{transform:skewY(-6deg) scaleX(1);opacity:0}}'
   ].join('\n');
 
   function ensureCss(){
@@ -138,28 +167,53 @@
   }
   function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+  function teamHtml(list, cls, tag){
+    return '<div class="fxr-side ' + cls + '">' + (tag ? '<span class="fxr-tag">' + esc(tag) + '</span>' : '') + (list || []).map(function(f){
+      var img = f && f.img && /^(data:image\/|https?:|blob:)/.test(f.img) ? 'background-image:url(&quot;' + esc(f.img) + '&quot;);' : '';
+      var initial = img ? '' : esc(String((f && f.name) || '?').charAt(0));
+      return '<div class="fxr-card"><div class="fxr-pic" style="background-color:' + esc((f && f.color) || '#17140f') + ';' + img + '">' + initial + '</div>' +
+        '<div class="fxr-nm">' + esc((f && f.name) || '?') + '</div></div>';
+    }).join('') + '</div>';
+  }
   function result(o){
     o = o || {};
     var snd = o.kind === 'perfect' || o.kind === 'loss' ? o.kind : 'win';
     lastSpecific = performance.now();
-    if (o.sound !== false) play(snd);
+    if (o.sound !== false) play(snd, o);
     if (reduced() || !document.body) return;
     ensureCss();
     clear();
     var kind = o.kind === 'perfect' || o.kind === 'loss' ? o.kind : 'win';
+    var tm = o.teams && o.teams.left && o.teams.left.length && o.teams.right && o.teams.right.length ? o.teams : null;
     var el = document.createElement('div');
     el.id = 'fxr';
-    el.className = kind;
+    el.className = kind + (tm ? ' teams' : '');
     el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = '<div class="bg"></div>' + (kind === 'perfect' ? '<div class="rays"></div>' : '') + '<canvas></canvas>' +
-      (kind === 'perfect' ? '<div class="crown">★</div>' : '') +
+    var resHtml = (kind === 'perfect' ? '<div class="crown">★</div>' : '') +
       '<div class="t">' + esc(o.title || (kind === 'loss' ? 'LOSS' : 'WIN!')) + '</div>' +
+      (tm ? '<div class="fxr-tm" style="--out:' + (kind === 'perfect' ? '2.7s' : kind === 'loss' ? '1.6s' : '1.75s') + '">' +
+        teamHtml(tm.left, tm.winner === 'left' ? 'won' : 'lost', tm.winner === 'left' ? 'WINNER' : '') +
+        '<div class="fxr-vs">VS</div>' +
+        teamHtml(tm.right, tm.winner === 'right' ? 'won' : 'lost', tm.winner === 'right' ? 'WINNER' : '') + '</div>' : '') +
       (o.sub ? '<div class="s">' + esc(o.sub) + '</div>' : '');
+    var delay = tm ? 720 : 0;
+    el.innerHTML = '<div class="bg"></div>' + (kind === 'perfect' ? '<div class="rays"></div>' : '') + '<canvas></canvas>' +
+      (tm ? '<div class="slash"></div><div class="game">GAME!</div>' : '<div class="res">' + resHtml + '</div>');
     document.body.appendChild(el);
-    stopParticles = particles(el.querySelector('canvas'), kind);
+    var reveal = function(){
+      if (!el.parentNode) return;
+      if (tm){
+        var g = el.querySelector('.game'), sl = el.querySelector('.slash');
+        if (g) g.remove(); if (sl) sl.remove();
+        var r = document.createElement('div'); r.className = 'res'; r.innerHTML = resHtml; el.appendChild(r);
+      }
+      stopParticles = particles(el.querySelector('canvas'), kind);
+    };
+    if (delay) timers.push(setTimeout(reveal, delay)); else reveal();
     // Shake only the page content, and through el.animate(): a CSS class would restart the content's own
     // slide-in animation, and a transform on an ancestor of fixed bars or toasts would make them jump.
     var root = document.querySelector(o.shakeTarget || 'main');
+    if (tm) root = null;
     try {
       if (root && root.animate && kind === 'loss'){
         root.animate([{transform:'none'}, {transform:'translate(-9px,2px) rotate(-.4deg)'}, {transform:'translate(9px,-2px) rotate(.4deg)'},
@@ -168,7 +222,7 @@
         root.animate([{filter:'none'}, {filter:'brightness(1.12) saturate(1.25)'}, {filter:'none'}], {duration:900, iterations:2});
       }
     } catch(e){}
-    var total = kind === 'perfect' ? 3400 : kind === 'loss' ? 1600 : 1700;
+    var total = (kind === 'perfect' ? 3400 : kind === 'loss' ? 1600 : 1700) + (tm ? delay + 700 : 0);
     timers.push(setTimeout(clear, total));
     try { if (navigator.vibrate) navigator.vibrate(kind === 'perfect' ? [40, 60, 40, 60, 120] : kind === 'loss' ? [160] : [30, 40, 30]); } catch(e){}
   }
@@ -226,22 +280,74 @@
     try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){}
     if (on && audio()) build('chime', actx, master, actx.currentTime + .02);
   }
-  function play(kind){
+  function play(kind, o){
     if (!soundOn() || !audio()) return;
     if (window.__sfxLog) window.__sfxLog.push(kind);
     try {
-      if (!playResult(kind)) build(kind, actx, master, actx.currentTime + .03);
+      if (!playResult(kind, o || {})) build(kind, actx, master, actx.currentTime + .03);
     } catch(e){}
   }
 
   // ---------- recorded sounds (sounds/, credits in sounds/CREDITS.txt) ----------
   var SAMPLES = {
-    winJingle: ['jingle-win-sax02', 'jingle-win-nes12', 'jingle-win-hit11', 'jingle-win-sax10', 'jingle-win-nes08', 'jingle-win-sax12'],
+    winJingle: ['win-orchestral', 'win-victory-bout', 'win-fanfare-lick', 'win-winner-is', 'win-flag', 'win-success', 'jingle-win-sax02', 'jingle-win-hit11'],
     celebrate: ['cel-crowd-roar', 'cel-crowd-chant', 'cel-applause', 'cel-fireworks'],
+    sixFanfare: ['six-hyper-fanfare', 'six-champion'],
     sixCrowd: ['six-crowd-cheer'],
     // Loss sounds: one at random, never the same one twice in a row.
-    lossSay: ['loss-gameshow', 'loss-arcade', 'loss-wah-wah', 'loss-sad-trombone', 'loss-life-lost']
+    lossSay: ['loss-gameshow', 'loss-arcade', 'loss-wah-wah', 'loss-sad-trombone', 'loss-life-lost', 'loss-trumpet', 'loss-lose-bout', 'loss-failed']
   };
+  // Commentator quips (sounds/voice/vo-<voice>-<id>.mp3, made with the open Kokoro TTS model). [id, 2v2 only]
+  var QUIPS = {
+    six: [['six1'], ['six2'], ['six3'], ['six4'], ['six5'], ['six6'], ['six7', 1], ['six8']],
+    stomp: [['stomp1'], ['stomp2'], ['stomp3'], ['stomp4'], ['stomp5'], ['stomp6'], ['stomp7'], ['stomp8', 1], ['stomp9']],
+    closeW: [['cw1'], ['cw2'], ['cw3'], ['cw4'], ['cw5'], ['cw6'], ['cw7']],
+    closeL: [['cl1'], ['cl2'], ['cl3'], ['cl4'], ['cl5'], ['cl6']],
+    bad: [['bad1'], ['bad2'], ['bad3'], ['bad4'], ['bad5'], ['bad6', 1], ['bad7', 1], ['bad8'], ['bad9']],
+    win: [['win1'], ['win2'], ['win3'], ['win4']],
+    loss: [['loss1'], ['loss2'], ['loss3'], ['loss4']],
+    hotW: [['hot1'], ['hot2'], ['hot3', 1]],
+    coldL: [['cold1'], ['cold2'], ['cold3']]
+  };
+  var VOICES = ['heart', 'michael'];
+  function voice(){ var v = 'heart'; try { v = localStorage.getItem('stocklog.voice') || 'heart'; } catch(e){} return v === 'off' || VOICES.indexOf(v) >= 0 ? v : 'heart'; }
+  function setVoice(v){
+    lastSpecific = performance.now();
+    try { localStorage.setItem('stocklog.voice', v); } catch(e){}
+    if (v !== 'off' && soundOn() && audio()){ preloadVoice(v, function(){ say('win', false, actx.currentTime + .05); }); }
+  }
+  var voiceLoaded = {}, recentQuips = [];
+  function preloadVoice(v, done){
+    if (!actx || v === 'off' || VOICES.indexOf(v) < 0) return;
+    if (voiceLoaded[v]){ if (done && voiceLoaded[v] === 2) done(); return; }
+    voiceLoaded[v] = 1;
+    var ids = [];
+    Object.keys(QUIPS).forEach(function(k){ QUIPS[k].forEach(function(q){ ids.push(q[0]); }); });
+    var left = ids.length;
+    ids.forEach(function(id){
+      var n = 'vo-' + v + '-' + id;
+      fetch(SOUND_BASE + 'voice/' + n + '.mp3').then(function(r){ if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(function(ab){ return new Promise(function(res, rej){ var p = actx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); }); })
+        .then(function(buf){ buffers[n] = buf; }).catch(function(){})
+        .then(function(){ if (--left === 0){ voiceLoaded[v] = 2; if (done) done(); } });
+    });
+  }
+  // Speak one quip from a category at time t; returns its length (0 if voice is off or not loaded).
+  function say(cat, duo, t){
+    var v = voice();
+    if (v === 'off' || !QUIPS[cat] || !actx) return 0;
+    var pool = QUIPS[cat].filter(function(q){ return (!q[1] || duo) && buffers['vo-' + v + '-' + q[0]]; });
+    if (!pool.length) return 0;
+    var fresh = pool.filter(function(q){ return recentQuips.indexOf(q[0]) < 0; });
+    var q = (fresh.length ? fresh : pool)[Math.floor(Math.random() * (fresh.length ? fresh : pool).length)];
+    recentQuips.push(q[0]); if (recentQuips.length > 6) recentQuips.shift();
+    if (window.__sfxLog) window.__sfxLog.push('voice:' + q[0]);
+    var src = actx.createBufferSource(), g = actx.createGain();
+    src.buffer = buffers['vo-' + v + '-' + q[0]]; g.gain.value = 1.15;
+    src.connect(g); g.connect(master); send(actx, g, .04);
+    src.start(t);
+    return src.buffer.duration;
+  }
   var SOUND_BASE = ((document.currentScript && document.currentScript.src) || location.href).split('?')[0].replace(/[^/]*$/, '') + 'sounds/';
   var buffers = {}, loading = false, lastPick = {};
   function preloadSamples(){
@@ -257,6 +363,7 @@
         .then(function(buf){ buffers[n] = buf; })
         .catch(function(){});
     });
+    preloadVoice(voice());
   }
   // Random clip from a set, never the same one twice in a row; null if none have loaded yet.
   function pick(set){
@@ -267,38 +374,59 @@
     lastPick[set] = n;
     return n;
   }
+  var lastGain = null;
   function sample(name, t, gain, wet){
     var buf = name && buffers[name];
     if (!buf) return 0;
     var src = actx.createBufferSource(), g = actx.createGain();
-    src.buffer = buf; g.gain.value = gain || 1;
+    src.buffer = buf; g.gain.value = g._base = gain || 1;
     src.connect(g); g.connect(master); send(actx, g, wet);
     src.start(t);
+    lastGain = g;
     if (window.__sfxLog) window.__sfxLog.push('clip:' + name);
     return buf.duration;
   }
+  // Pull music down under the commentator, then let it back up.
+  function duck(g, at, len, to){
+    if (!g || !len) return;
+    var v = g._base || 1;
+    g.gain.setValueAtTime(v, at - .12);
+    g.gain.linearRampToValueAtTime(v * (to || .35), at);
+    g.gain.setValueAtTime(v * (to || .35), at + len);
+    g.gain.linearRampToValueAtTime(v, at + len + .3);
+  }
   // Recorded result sounds. Returns false when the clips aren't loaded yet, so the synthesized version plays instead.
-  function playResult(kind){
-    var t = actx.currentTime + .03;
+  // A quip comes in partway through the music, which ducks under it.
+  function quip(o, music, t, delay){
+    var cat = o.quip || (o.kind === 'perfect' ? 'six' : o.kind === 'loss' ? 'loss' : 'win');
+    var at = t + delay, len = say(cat, !!o.duo, at);
+    duck(music, at, len, .3);
+  }
+  function playResult(kind, o){
+    var t = actx.currentTime + .03, g, d;
     if (kind === 'win'){
-      // no voice: a jingle, and most of the time a crowd, applause or fireworks under it
+      // a victory jingle; short ones get a crowd, applause or fireworks under them
       var jingle = pick('winJingle');
       if (!jingle) return false;
-      sample(jingle, t, .85, .25);
-      if (Math.random() < .7) sample(pick('celebrate'), t + .08, .55, .15);
+      d = sample(jingle, t, .85, .25); g = lastGain;
+      if (d < 2.5 && Math.random() < .7) sample(pick('celebrate'), t + .08, .5, .15);
+      quip(o, g, t, Math.min(1.1, Math.max(.55, d * .6)));
       return true;
     }
     if (kind === 'perfect'){
-      var crowd = pick('sixCrowd');
-      if (!crowd) return false;
-      build('perfect', actx, master, t);
-      sample(crowd, t + .38, .75, .15);
+      // big fanfare, a stadium going wild, and the commentator losing it
+      var fan = pick('sixFanfare'), crowd = pick('sixCrowd');
+      if (!fan && !crowd) return false;
+      if (fan){ sample(fan, t, .95, .25); g = lastGain; } else build('perfect', actx, master, t);
+      if (crowd) sample(crowd, t + .35, .7, .15);
+      quip(o, g, t, 1.4);
       return true;
     }
     if (kind === 'loss'){
-      var say = pick('lossSay');
-      if (!say) return false;
-      sample(say, t, .9, .12);
+      var sting = pick('lossSay');
+      if (!sting) return false;
+      d = sample(sting, t, .9, .12); g = lastGain;
+      quip(o, g, t, Math.min(1.2, Math.max(.6, d * .7)));
       return true;
     }
     return false;
@@ -601,7 +729,9 @@
     }
   }
 
-  window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound, ui:ui,
+  window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound, ui:ui, voice:voice, setVoice:setVoice,
+    // achievements and other moments: a quip on its own (when sound and voice are on)
+    say:function(cat, duo){ if (soundOn() && audio()) say(cat, duo, actx.currentTime + .05); },
     // test hook: render a sound into any AudioContext (e.g. an OfflineAudioContext)
     _renderSound:function(kind, ctx){ var dest = out(ctx, ctx.destination); return build(kind, ctx, dest, .02); }};
 })();
