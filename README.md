@@ -118,10 +118,11 @@ A new board arrives every Monday, announced with "A NEW CHALLENGER APPROACHES!".
 
 ## Fighter profiles
 
-Every fighter has a full profile page: a big portrait, record and win rate on your side, first and last time played, the last 20 games as a form strip, Cooper / Nathan / 1v1 / 2v2 splits, best teammate, best stage, nemesis (worst losing matchup), favorite victim, its record when it's on the other side, close-game record, six-stocks and Cooper's KOs per game. Open one from **FULL FIGHTER PROFILE** in a Top 10 fighter's breakdown, **PROFILE ▸** on the Roster tab, a row in Stats' Fighter Breakdown, or a clutch fighter. **◀ / ▶** (or the arrow keys) step through every fighter you've played.
+Every fighter has a full profile page: a big portrait, record and win rate on your side, first and last time played, the last 20 games as a form strip, Cooper / Nathan / 1v1 / 2v2 splits, best teammate, best stage, nemesis (worst losing matchup), favorite victim, its record when it's on the other side, close-game record, six-stocks and Cooper's KOs per game. Open one from **FULL FIGHTER PROFILE** in a Top 10 fighter's breakdown, **PROFILE ▸** on the Roster tab, or a clutch fighter. **◀ / ▶** (or the arrow keys) step through every fighter you've played.
 
 ## Stats additions
 
+- **Top of the page:** **Doubles Synergy** (your best Cooper + Nathan pairings) and the **Streak Board** (current streak, best win run, worst skid) sit side by side right under the range bar, on phones too. The old Fighter Breakdown table is gone; the Roster tab and fighter profiles cover per-fighter records.
 - **Range:** a bar at the top of STATS picks **ALL TIME / 90 DAYS / 30 DAYS / 7 DAYS**. It applies to the charts, the 1v1/2v2, stage and item splits, the KO tiles, Prime Time and Clutch (the record book, report card and fighter tables stay all-time).
 - **Expand any chart:** the **⤢** button next to a card's title (stock margin, win rate, Prime Time, Clutch, KOs, history scrubber, record book, report card) opens it full screen with taller charts and the range bar on top. **Esc**, **✕ CLOSE** or tapping outside closes it.
 - **Record book:** longest win and losing streaks (with dates), most games in a day, best and roughest day (5+ games), most six-stocks in a day, biggest stock haul in a day, Cooper's and Nathan's most KOs in a game, longest session, most days in a row, longest break, most fighters in a day, best month (10+ games) and your first game.
