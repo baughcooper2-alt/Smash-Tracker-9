@@ -16,6 +16,7 @@ A win/loss tracker for solo and doubles matches, built as an installable Progres
 - [sync.js](sync.js) — cloud sync engine shared by the tracker and the phone remote
 - [api/sync-config.js](api/sync-config.js) — Vercel function that hands the browser the Supabase URL and public key
 - [supabase/schema.sql](supabase/schema.sql) — database tables and access rules for cloud sync
+- [fonts/](fonts/) — M PLUS Rounded 1c, the rounded heavy typeface behind the Smash-style look (SIL Open Font License, see [fonts/OFL.txt](fonts/OFL.txt))
 - [vendor/](vendor/) — third-party libraries (supabase-js for sync, qrcode-generator for the phone QR code)
 
 ## Running locally
@@ -44,6 +45,10 @@ Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and 
 
 One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without it the tracker works exactly as before, saving on the device only.
 
+## Look
+
+The tracker and the phone remote are styled after the Smash Ultimate menus: a rounded heavy typeface, a black header with a red edge, tabs as slanted colour tiles (Home red, Session orange, Stats blue, Random green, Tiers pink, Roster gold, Sync purple) with a yellow frame on the one you're on, black slanted plates for section titles, slanted tiles for the big buttons (Resume Session, WIN, LOSS) that light up with a yellow frame, striped backgrounds, and a black info bar along the bottom on computers that describes the current tab and shows the time. It's an inspired look built from scratch, with no Nintendo logos or artwork.
+
 ## Home page
 
 Home shows a **Top 10 for each player** — Cooper (his own fighter in every game) and Nathan (his doubles picks plus any 1v1 where he's tagged as the rival), ranked by wins. The **ALL / 1V1 / 2V2** switch filters both boards, and tapping a fighter opens its breakdown.
@@ -63,7 +68,8 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
 
 ## Session extras
 
-- **Auto rivals:** when you play the same opposing characters twice in a row (no more than 3 hours apart) and no rival is set, the tracker (and the phone remote) asks who's playing them. Pick an existing rival, type a new name, or tap **JUST CPUs** so it won't ask about those opponents again. Naming them sets that person as the rival and tags those games, so they count in the Rivalry Ledger. The rival switches off automatically as soon as the opposing characters change. If the same characters come back later, the question suggests the same name ("Jake AGAIN?"). A rival picked by hand under PLAYING AGAINST stays on until you change it.
+- **Auto rivals:** when you play the same opposing characters twice in a row (no more than 3 hours apart) and no rival is set, the tracker (and the phone remote) asks who's playing them. Pick an existing rival, type a new name, or tap **JUST CPUs** so it won't ask about those opponents again. Naming them sets that person as the rival and tags those games, so they count in the Rivalry Ledger. If the same characters come back later, the question suggests the same name ("Jake AGAIN?").
+- **Rivals switch off with the opponents:** any rival, whether named from that question, picked by hand under PLAYING AGAINST, or restored by a rematch, is tied to the opposing characters it was set with. It switches off as soon as either opposing fighter changes (or you switch 1v1/2v2), with a short message saying so. Pick your fighters first, then the rival.
 - **Momentum** bar under today's record: a marker that slides toward **ON FIRE** or **ICE COLD** based on today's last 8 games, with newer games and bigger stock margins counting more.
 - **↻ REMATCH** strip (tracker and phone remote): shows the last game, and its **WIN** / **LOSS** buttons put that game's exact setup back (mode, all four fighters, stage, items, stocks, rival) and go straight to the stock prompt.
 

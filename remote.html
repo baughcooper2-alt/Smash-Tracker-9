@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Smash Remote</title>
-<meta name="theme-color" content="#f5f6f3">
+<meta name="theme-color" content="#18181f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -297,6 +297,41 @@
   .tile { border:1px solid var(--hair); box-shadow:0 1px 2px rgba(16,24,40,.04); }
   .tile.on { background:#fff8e6; border-color:rgba(201,150,30,.5); box-shadow:0 0 0 2px rgba(242,193,78,.5); }
   .toast { background:rgba(23,20,15,.92); color:#fff; border-radius:14px; letter-spacing:.06em; font-weight:700 !important; }
+
+  /* ===== Smash-style theme (matches the tracker): rounded heavy type, colour tiles, yellow selection ===== */
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:100 500;font-display:swap;src:url(fonts/mplus-rounded-500.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:600 700;font-display:swap;src:url(fonts/mplus-rounded-700.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/mplus-rounded-800.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:900;font-display:swap;src:url(fonts/mplus-rounded-900.woff2) format('woff2')}
+  :root{--sm-red:#e4202d;--sm-red2:#a90f1b;--sm-green:#25ad49;--sm-green2:#127a30;--sm-blue:#1f86e6;--sm-yellow:#ffd200;--sm-orange:#f39a1e;--sm-dark:#18181f}
+  html,body,body *{font-family:'SmashRound','M PLUS Rounded 1c',system-ui,-apple-system,sans-serif !important}
+  html,body{background-color:#eceef2 !important}
+  body{background-image:linear-gradient(118deg,rgba(228,32,45,0) 0 58%,rgba(228,32,45,.08) 58% 71%,rgba(228,32,45,0) 71%),
+    repeating-linear-gradient(118deg,rgba(24,24,31,.04) 0 2px,rgba(24,24,31,0) 2px 24px) !important;background-attachment:fixed !important}
+  header{background:linear-gradient(118deg,#18181f 0 70%,#22222b 70%) !important;box-shadow:0 4px 0 var(--sm-red) !important;color:#fff !important}
+  .logo{border-radius:50% !important;background:radial-gradient(circle at 35% 30%,#ff5b66,var(--sm-red) 55%,var(--sm-red2)) !important;border-color:#fff !important}
+  .logo::before{display:none !important}
+  .title{font-weight:900 !important}
+  .blk{font-weight:900 !important}
+  .card{border-radius:12px !important}
+  .big{clip-path:polygon(16px 0,100% 0,calc(100% - 16px) 100%,0 100%);border:none !important;border-radius:0 !important;box-shadow:none !important;position:relative;overflow:hidden}
+  .big::after{content:'';position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(118deg,rgba(255,255,255,.08) 0 3px,rgba(255,255,255,0) 3px 16px)}
+  .big.win{background:linear-gradient(135deg,#3cc464,var(--sm-green) 45%,var(--sm-green2)) !important}
+  .big.loss{background:linear-gradient(135deg,#ff4a55,var(--sm-red) 45%,var(--sm-red2)) !important}
+  .big b{text-shadow:0 4px 0 rgba(0,0,0,.25)}
+  .big:active{transform:none;box-shadow:inset 0 0 0 5px var(--sm-yellow) !important}
+  .seg{background:#18181f !important;border-radius:10px !important}
+  .seg button{color:#fff;opacity:.55}
+  .seg button.on{background:var(--sm-red) !important;color:#fff !important;opacity:1;box-shadow:inset 0 0 0 3px var(--sm-yellow) !important;
+    clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);border-radius:0 !important}
+  nav.tabs{background:rgba(24,24,31,.94) !important;border:1px solid rgba(255,255,255,.1) !important}
+  nav.tabs button{clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);border-radius:0 !important;color:#fff !important;opacity:1 !important;filter:brightness(.7)}
+  nav.tabs button:first-child{background:var(--sm-red) !important}
+  nav.tabs button:last-child{background:var(--sm-blue) !important}
+  nav.tabs button.on{filter:none;box-shadow:inset 0 0 0 3px var(--sm-yellow) !important}
+  .sheet{border-top:4px solid var(--sm-red)}
+  .toast,#toast{border-left:5px solid var(--sm-yellow)}
+  header .today .lbl{color:var(--sm-yellow) !important;opacity:1 !important}
 </style>
 </head>
 <body>
@@ -494,7 +529,7 @@
       var id = get(slot);
       return '<button class="fbtn" data-act="pick" data-v="'+slot+'">'+chip(id, 40)+'<span class="nm"><b>'+esc(nameOf(id))+'</b><i>'+role+'</i></span></button>';
     };
-    if (get('vsPlayer')) out += '<div class="card rvtag"><span>VS <b>' + esc(String(get('vsPlayer')).toUpperCase()) + '</b> \u00b7 RIVAL' + (D.kv.rivalAuto ? ' (OFF WHEN OPPONENTS CHANGE)' : '') + '</span><button class="blk" data-act="rivalOff">CLEAR</button></div>';
+    if (get('vsPlayer')) out += '<div class="card rvtag"><span>VS <b>' + esc(String(get('vsPlayer')).toUpperCase()) + '</b> \u00b7 RIVAL (OFF WHEN OPPONENTS CHANGE)</span><button class="blk" data-act="rivalOff">CLEAR</button></div>';
     out += '<div class="card match">' +
       '<div class="side"><span class="lbl">'+mineLbl+'</span>' + fb('me', handoff ? 'NATHAN' : 'COOPER') + (dubs ? fb('partner', handoff ? 'PARTNER' : 'NATHAN') : '') + '</div>' +
       '<div class="vs blk">VS</div>' +
@@ -701,11 +736,12 @@
   function lineupOf(m){ return lineupKey(m.mode, m.opp1, m.opp2); }
   var RIVAL_GAP = 3 * 3600 * 1000;
   function currentLineup(){ return get('handoffOn') ? lineupKey(get('mode'), get('me'), get('partner')) : lineupKey(get('mode'), get('opp1'), get('opp2')); }
-  // An auto rival turns off as soon as the opposing characters change.
+  // Any rival (auto, hand-picked or from a rematch) is tied to the opposing characters it was set with,
+  // and turns off as soon as they change.
   function rivalWatch(){
-    var ra = D.kv.rivalAuto;
-    if (!ra) return;
-    if (get('vsPlayer') !== ra.name){ D.kv = Object.assign({}, D.kv, {rivalAuto:null}); return; }
+    var ra = D.kv.rivalAuto, vs = get('vsPlayer');
+    if (vs && (!ra || ra.name !== vs)){ D.kv = Object.assign({}, D.kv, {rivalAuto:{key:currentLineup(), name:vs}}); return; }
+    if (!vs){ if (ra) D.kv = Object.assign({}, D.kv, {rivalAuto:null}); return; }
     if (currentLineup() !== ra.key){ D.kv = Object.assign({}, D.kv, {vsPlayer:'', rivalAuto:null}); toast('NEW OPPONENTS \u00b7 ' + String(ra.name).toUpperCase() + ' IS OFF'); }
   }
   function rivalCheck(){
