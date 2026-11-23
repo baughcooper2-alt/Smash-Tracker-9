@@ -45,6 +45,12 @@ Sign in on the tracker's **SYNC** tab and your games, fighters, KOs, roster and 
 
 One-time setup (Supabase + Vercel): see [SYNC-SETUP.md](SYNC-SETUP.md). Without it the tracker works exactly as before, saving on the device only.
 
+## Phones
+
+- **Swipe** left or right on the page to move to the next or previous tab (charts, the tab bar, buttons and inputs don't trigger it).
+- **Tab bar:** shows the four tabs you use most plus **⋯ MORE**, which opens the rest as big menu tiles. When you're on one of those, the MORE button shows its name. The bar is worked out once per visit so it never reshuffles under your thumb.
+- **Haptics:** wins, losses and six-stocks each have their own vibration pattern, and the remote ticks on taps (with its own patterns for rematch and undo). Switch it off in the MORE sheet on the tracker or the remote's footer. Vibration works on Android; iPhones don't let web pages vibrate.
+
 ## Look
 
 The tracker and the phone remote are styled after the Smash Ultimate menus: a rounded heavy typeface, a black header with a red edge, tabs as slanted colour tiles (Home red, Session orange, Stats blue, Random green, Tiers pink, Roster gold, Sync purple) with a yellow frame on the one you're on, black slanted plates for section titles, slanted tiles for the big buttons (Resume Session, WIN, LOSS) that light up with a yellow frame, striped backgrounds, and a black info bar along the bottom on computers that describes the current tab and shows the time. The character select matches too. On a computer it has a yellow slanted banner with a red round back button, a yellow frame on the hovered fighter, and striped player cards in each player's colour (P1 red, P2 blue, CPUs grey) with white name plates. On phones the fighter picker is a dark select screen with portrait tiles, name strips and a yellow frame on the current pick. Switching tabs is a quick two-step: the tab you tapped lights up immediately, the current page fades and slides out (about 0.15s), the page jumps back to the top while it's invisible, and the new page fades and slides in from the side you're heading toward (about 0.35s). It only animates opacity and position, so it stays smooth on phones and works in every browser; reduced-motion settings turn it off. On phones the tab bar scrolls itself to keep the current tab in view. It's an inspired look built from scratch, with no Nintendo logos or artwork.
@@ -112,6 +118,11 @@ Every fighter has a full profile page: a big portrait, record and win rate on yo
 
 ## Stats additions
 
+- **Range:** a bar at the top of STATS picks **ALL TIME / 90 DAYS / 30 DAYS / 7 DAYS**. It applies to the charts, the 1v1/2v2, stage and item splits, the KO tiles, Prime Time and Clutch (the record book, report card and fighter tables stay all-time).
+- **Expand any chart:** the **⤢** button next to a card's title (stock margin, win rate, Prime Time, Clutch, KOs, history scrubber, record book, report card) opens it full screen with taller charts and the range bar on top. **Esc**, **✕ CLOSE** or tapping outside closes it.
+- **Record book:** longest win and losing streaks (with dates), most games in a day, best and roughest day (5+ games), most six-stocks in a day, biggest stock haul in a day, Cooper's and Nathan's most KOs in a game, longest session, most days in a row, longest break, most fighters in a day, best month (10+ games) and your first game.
+- **Monthly report card:** pick a month for its letter grade (same S–F scale as the tier list), record, win rate, days played, six-stocks, stocks per game and team KOs per game, each with ▲/▼ against the month before, plus Cooper's and Nathan's mains, best fighter, best duo, most improved fighter and best day.
+- **Count-ups:** big numbers (career record, stat tiles, rival and award totals, records) roll up from zero when a tab opens.
 - **Chart periods:** the three over-time charts each have their own switch. **Stock Margin** and **KOs** can show **GAME** (every game), **DAY**, **WEEK** (starting Monday) or **MONTH**. **Win Rate** can show **DAY**, **WEEK** or **MONTH**. Grouped views show the average stock margin per game, the win rate, or KOs per game for each period, and hovering a point shows its record and game count. Each device remembers your choice.
 - **Prime time:** a heatmap of win rate by day of the week and time of day (3-hour blocks), with day and time totals and a line naming your best and worst slots. Red means losing, grey is 50%, green is winning. Every cell shows its number, and hovering a cell shows the record and stock diff. Cells with fewer than 3 games are faded.
 - **Clutch factor:** your record in close games (decided by about a third of the stocks or less: 1 stock in 3-stock 1v1, 1–2 in 2v2), solid wins and blowouts (two thirds or more), a verdict (**CLUTCH**, **STEADY** or **SHAKY**) comparing close games with your overall rate, and your most clutch fighters.

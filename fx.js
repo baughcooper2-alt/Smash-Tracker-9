@@ -224,7 +224,9 @@
     } catch(e){}
     var total = (kind === 'perfect' ? 3400 : kind === 'loss' ? 1600 : 1700) + (tm ? delay + 700 : 0);
     timers.push(setTimeout(clear, total));
-    try { if (navigator.vibrate) navigator.vibrate(kind === 'perfect' ? [40, 60, 40, 60, 120] : kind === 'loss' ? [160] : [30, 40, 30]); } catch(e){}
+    // Haptics (phones that support vibration; iPhones don't expose it to web pages). Off with stocklog.haptics = 'off'.
+    try { if (navigator.vibrate && localStorage.getItem('stocklog.haptics') !== 'off')
+      navigator.vibrate(kind === 'perfect' ? [40, 50, 40, 50, 40, 50, 240] : kind === 'loss' ? [170, 80, 90] : [25, 40, 25, 40, 70]); } catch(e){}
   }
 
 

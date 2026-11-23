@@ -461,7 +461,9 @@
   function isPerfect(m){ return !!m && m.result === 'W' && m.margin > 0 && m.margin >= fullStocks(m.mode, m.stocks); }
   var NUM_WORD = ['ZERO','ONE','TWO','THREE','FOUR','FIVE','SIX','SEVEN','EIGHT','NINE','TEN','ELEVEN','TWELVE'];
   function perfectWord(mode, stocks){ var n = fullStocks(mode, stocks); return (NUM_WORD[n] || String(n)) + '-STOCK'; }
-  function buzz(ms){ try { if (navigator.vibrate) navigator.vibrate(ms || 20); } catch(e){} }
+  function hapticsOn(){ try { return localStorage.getItem('stocklog.haptics') !== 'off'; } catch(e){ return true; } }
+  // Haptics: a short tick for taps, patterns for bigger moments. Phones without vibration support just skip it.
+  function buzz(ms){ if (!hapticsOn()) return; try { if (navigator.vibrate) navigator.vibrate(ms || 20); } catch(e){} }
   var toastT = null;
   function toast(msg){
     var el = document.getElementById('toast');
@@ -669,7 +671,7 @@
   function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function snowOn(){ try { return localStorage.getItem('stocklog.snow') !== 'off'; } catch(e){ return true; } }
   function footView(){
-    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="theme">THEME: '+themePref().toUpperCase()+'</button>·<a href="sounds/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">CREDITS</a></div>';
+    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="theme">THEME: '+themePref().toUpperCase()+'</button>·<button data-act="haptics">HAPTICS: '+(hapticsOn() ? 'ON' : 'OFF')+'</button>·<a href="sounds/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">CREDITS</a></div>';
   }
   function signInView(){
     return '<div class="card pair">' +
@@ -841,6 +843,12 @@
     signin: function(){ auth(false); },
     signup: function(){ auth(true); },
     sound: function(){ var on = !soundOn(); if (window.SmashFX) window.SmashFX.setSound(on); else { try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){} } toast(on ? 'SOUND ON' : 'SOUND OFF'); render(); },
+    haptics: function(){
+      var on = !hapticsOn();
+      try { localStorage.setItem('stocklog.haptics', on ? 'on' : 'off'); } catch(e){}
+      if (on) buzz([20, 40, 20]);
+      render(); toast(on ? 'HAPTICS ON' : 'HAPTICS OFF');
+    },
     theme: function(){
       var cur = themePref(), next = cur === 'auto' ? 'dark' : cur === 'dark' ? 'light' : 'auto';
       try { localStorage.setItem('stocklog.theme', next); } catch(e){}
@@ -873,7 +881,7 @@
         vsPlayer:m.vs || '', me: sw ? m.opp1 : m.me, opp1: sw ? m.me : m.opp1, koMe:0, koNathan:0};
       if (m.mode === 'doubles'){ p.partner = sw ? m.opp2 : m.partner; p.opp2 = sw ? m.partner : m.opp2; }
       setKv(p);
-      S.pending = el.dataset.v; buzz(); drawSheet();
+      S.pending = el.dataset.v; buzz([15, 30, 15]); drawSheet();
     },
     cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
     rivalPick: function(el){ rivalSet(el.dataset.v); },
@@ -906,7 +914,7 @@
       if (S.undoArm !== id){ S.undoArm = id; render(); setTimeout(function(){ if (S.undoArm === id){ S.undoArm = null; render(); } }, 3000); return; }
       S.undoArm = null;
       D.matches = D.matches.filter(function(m){ return m.id !== id; });
-      changed(); buzz(); toast('UNDONE');
+      changed(); buzz([10, 40, 10, 40, 10]); toast('UNDONE');
     },
     stocks: function(el){ setKv({stocks:Number(el.dataset.v)}); },
     stage: function(el){ setKv({stage:el.dataset.v}); },
