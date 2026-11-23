@@ -63,6 +63,7 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
 
 ## Session extras
 
+- **Auto rivals:** when you play the same opposing characters twice in a row (no more than 3 hours apart) and no rival is set, the tracker (and the phone remote) asks who's playing them. Pick an existing rival, type a new name, or tap **JUST CPUs** so it won't ask about those opponents again. Naming them sets that person as the rival and tags those games, so they count in the Rivalry Ledger. The rival switches off automatically as soon as the opposing characters change. If the same characters come back later, the question suggests the same name ("Jake AGAIN?"). A rival picked by hand under PLAYING AGAINST stays on until you change it.
 - **Momentum** bar under today's record: a marker that slides toward **ON FIRE** or **ICE COLD** based on today's last 8 games, with newer games and bigger stock margins counting more.
 - **↻ REMATCH** strip (tracker and phone remote): shows the last game, and its **WIN** / **LOSS** buttons put that game's exact setup back (mode, all four fighters, stage, items, stocks, rival) and go straight to the stock prompt.
 

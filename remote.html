@@ -209,6 +209,18 @@
   .stk button:active { transform:translate(3px,3px); box-shadow:none; }
   .sheet.W .stk button { background:#dcefe3; } .sheet.L .stk button { background:#f9dfe2; }
   .sheet .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  /* who's the rival? */
+  .sheet .rv-opp { display:flex; align-items:center; gap:10px; }
+  .sheet .rv-opp .t span { font-size:13px !important; white-space:normal !important; line-height:1.35; }
+  .sheet .rp { display:flex; flex-wrap:wrap; gap:7px; }
+  .sheet .rp button { padding:10px 14px; border-radius:999px; border:2px solid rgba(23,20,15,.18); background:#fff; font-size:13px; letter-spacing:.04em; }
+  .sheet .rp button.sug { background:var(--red); border-color:var(--red); color:var(--paper); }
+  .sheet .rn { display:flex; gap:8px; }
+  .sheet .rn input { flex:1; min-width:0; padding:12px; border:2px solid rgba(23,20,15,.18); border-radius:12px; font:700 16px Archivo, sans-serif; background:#f6f4ec; }
+  .sheet .rn button { padding:0 16px; border-radius:12px; background:var(--ink); color:var(--paper); font-size:13px; letter-spacing:.06em; }
+  .rvtag { display:flex; align-items:center; gap:8px; padding:8px 10px; font-size:11px; font-weight:800; letter-spacing:.1em; }
+  .rvtag b { color:var(--red); }
+  .rvtag button { margin-left:auto; padding:5px 9px; border:2px solid rgba(23,20,15,.18); border-radius:8px; background:#fff; font-size:10px; letter-spacing:.06em; }
   .sheet .row2 button { padding:13px; border:var(--line); border-radius:12px; font-size:13px; letter-spacing:.08em; background:var(--paper); }
   .sheet .row2 button.dark { background:var(--ink); color:var(--paper); }
   .sheet .kos { display:flex; flex-wrap:wrap; gap:6px; font-size:11px; font-weight:800; letter-spacing:.1em; }
@@ -330,7 +342,7 @@
 
   // ---------- data: this phone's copy of the cloud ----------
   var D = {uid:'', matches:[], kv:{}};
-  var S = {sync:{phase:'loading'}, view:'log', pending:null, picker:null, search:'', undoArm:null, busy:false, err:'', fighters:[], byId:{}};
+  var S = {sync:{phase:'loading'}, view:'log', pending:null, rival:null, picker:null, search:'', undoArm:null, busy:false, err:'', fighters:[], byId:{}};
 
   function load(){
     try {
@@ -482,6 +494,7 @@
       var id = get(slot);
       return '<button class="fbtn" data-act="pick" data-v="'+slot+'">'+chip(id, 40)+'<span class="nm"><b>'+esc(nameOf(id))+'</b><i>'+role+'</i></span></button>';
     };
+    if (get('vsPlayer')) out += '<div class="card rvtag"><span>VS <b>' + esc(String(get('vsPlayer')).toUpperCase()) + '</b> \u00b7 RIVAL' + (D.kv.rivalAuto ? ' (OFF WHEN OPPONENTS CHANGE)' : '') + '</span><button class="blk" data-act="rivalOff">CLEAR</button></div>';
     out += '<div class="card match">' +
       '<div class="side"><span class="lbl">'+mineLbl+'</span>' + fb('me', handoff ? 'NATHAN' : 'COOPER') + (dubs ? fb('partner', handoff ? 'PARTNER' : 'NATHAN') : '') + '</div>' +
       '<div class="vs blk">VS</div>' +
@@ -610,6 +623,23 @@
 
   function drawSheet(){
     var el = document.getElementById('sheet');
+    if (S.rival){
+      var lastG = D.matches[D.matches.length - 1];
+      if (!lastG || lastG.id !== S.rival.id || lastG.vs || (get('rivalNo') || []).indexOf(S.rival.key) > -1) S.rival = null;
+    }
+    if (!S.pending && S.rival && signedIn()){
+      var r = S.rival, opp = r.ids.map(nameOf).join(' + ');
+      var picks = [r.suggest].concat(get('players') || []).filter(function(p, i, a){ return p && a.indexOf(p) === i; });
+      var keep = document.getElementById('rivalName'), typed = keep ? keep.value : '';
+      setHtml(el, '<div class="scrim" data-act="cancel"><div class="sheet" data-stop="1">' +
+        '<div class="sub">SAME OPPONENTS AGAIN \u00b7 A RIVAL APPEARS?</div>' +
+        '<div class="rv-opp">' + r.ids.map(function(id){ return chip(id, 48); }).join('') + '<span class="t"><span>You played ' + esc(opp) + ' ' + (r.run >= 3 ? r.run + ' games' : 'twice') + ' in a row. Who\u2019s playing ' + (r.ids.length > 1 ? 'them' : 'it') + '?</span></span></div>' +
+        (picks.length ? '<div class="rp">' + picks.map(function(p){ return '<button class="blk' + (p === r.suggest ? ' sug' : '') + '" data-act="rivalPick" data-v="' + esc(p) + '">' + esc(p) + (p === r.suggest ? ' AGAIN?' : '') + '</button>'; }).join('') + '</div>' : '') +
+        '<div class="rn"><input id="rivalName" maxlength="24" autocomplete="off" placeholder="Rival\u2019s name" value="' + esc(typed) + '"><button class="blk" data-act="rivalSave">SAVE</button></div>' +
+        '<div class="row2"><button class="blk" data-act="rivalCpu">JUST CPUs</button><button class="blk" data-act="cancel">ASK LATER</button></div>' +
+      '</div></div>');
+      return;
+    }
     if (!S.pending || !signedIn()){ setHtml(el, ''); return; }
     var dubs = get('mode') === 'doubles';
     var max = Math.max(1, Math.min(12, (Number(get('stocks')) || 3) * (dubs ? 2 : 1)));
@@ -666,7 +696,44 @@
   }
 
   // ---------- actions ----------
-  function changed(){ save(); if (sync) sync.notify(); render(); }
+  // ---------- auto rivals (same opposing characters twice in a row); shared with the tracker ----------
+  function lineupKey(mode, a, b){ return (mode === 'doubles' ? 'D:' : 'S:') + [a, mode === 'doubles' ? b : null].filter(Boolean).sort().join('+'); }
+  function lineupOf(m){ return lineupKey(m.mode, m.opp1, m.opp2); }
+  var RIVAL_GAP = 3 * 3600 * 1000;
+  function currentLineup(){ return get('handoffOn') ? lineupKey(get('mode'), get('me'), get('partner')) : lineupKey(get('mode'), get('opp1'), get('opp2')); }
+  // An auto rival turns off as soon as the opposing characters change.
+  function rivalWatch(){
+    var ra = D.kv.rivalAuto;
+    if (!ra) return;
+    if (get('vsPlayer') !== ra.name){ D.kv = Object.assign({}, D.kv, {rivalAuto:null}); return; }
+    if (currentLineup() !== ra.key){ D.kv = Object.assign({}, D.kv, {vsPlayer:'', rivalAuto:null}); toast('NEW OPPONENTS \u00b7 ' + String(ra.name).toUpperCase() + ' IS OFF'); }
+  }
+  function rivalCheck(){
+    var M = D.matches, a = M[M.length - 1], b = M[M.length - 2];
+    if (!a || !b || a.vs || Date.now() - a.ts > RIVAL_GAP || a.ts - b.ts > RIVAL_GAP) return;
+    var key = lineupOf(a);
+    if (key !== lineupOf(b) || (get('rivalNo') || []).indexOf(key) > -1) return;
+    var run = 0;
+    for (var i = M.length - 1; i >= 0 && lineupOf(M[i]) === key && !M[i].vs && (i === M.length - 1 || M[i + 1].ts - M[i].ts <= RIVAL_GAP); i--) run++;
+    S.rival = {key:key, id:a.id, run:run, ids:[a.opp1, a.mode === 'doubles' ? a.opp2 : null].filter(Boolean), suggest:(get('rivalMap') || {})[key] || ''};
+    drawSheet();
+  }
+  function rivalSet(raw){
+    var r = S.rival, name = String(raw || '').trim().slice(0, 24);
+    if (!r) return;
+    if (!name){ toast('TYPE A NAME FIRST'); return; }
+    var players = (get('players') || []).slice();
+    if (players.indexOf(name) < 0) players.push(name);
+    var M = D.matches.slice();
+    for (var i = M.length - 1; i >= 0 && lineupOf(M[i]) === r.key && (i === M.length - 1 || M[i + 1].ts - M[i].ts <= RIVAL_GAP); i--) if (!M[i].vs) M[i] = Object.assign({}, M[i], {vs:name});
+    D.matches = M;
+    var map = Object.assign({}, get('rivalMap') || {}); map[r.key] = name;
+    S.rival = null;
+    setKv({players:players, vsPlayer:name, rivalAuto:{key:r.key, name:name}, rivalMap:map});
+    buzz(); toast('RIVAL: ' + name.toUpperCase());
+    drawSheet();
+  }
+  function changed(){ rivalWatch(); save(); if (sync) sync.notify(); render(); }
   function setKv(patch){ D.kv = Object.assign({}, D.kv, patch); changed(); }
 
   function logGame(result, margin){
@@ -731,7 +798,15 @@
       setKv(p);
       S.pending = el.dataset.v; buzz(); drawSheet();
     },
-    cancel: function(){ S.pending = null; drawSheet(); },
+    cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
+    rivalPick: function(el){ rivalSet(el.dataset.v); },
+    rivalSave: function(){ var i = document.getElementById('rivalName'); rivalSet(i ? i.value : ''); },
+    rivalCpu: function(){
+      if (!S.rival) return;
+      var no = (get('rivalNo') || []).filter(function(k){ return k !== S.rival.key; }).concat([S.rival.key]).slice(-60);
+      S.rival = null; setKv({rivalNo:no}); toast("WON'T ASK ABOUT THESE OPPONENTS AGAIN"); drawSheet();
+    },
+    rivalOff: function(){ setKv({vsPlayer:'', rivalAuto:null}); buzz(); toast('RIVAL OFF'); },
     stock: function(el){
       var result = S.pending;
       if (!result) return;
@@ -739,6 +814,7 @@
       var margin = Number(el.dataset.v) || 0, mode = get('mode'), stocks = Number(get('stocks')) || 3;
       var setup = {me:get('me'), partner:get('partner'), opp1:get('opp1'), opp2:get('opp2')}, dubsNow = mode === 'doubles';
       logGame(result, margin);
+      setTimeout(rivalCheck, 2600);
       var fx = function(id){ if (!id || !S.byId[id]) return null; var img = D.kv['img:' + id]; return {name:nameOf(id), color:colorOf(id), img: typeof img === 'string' && /^data:image\//.test(img) ? img : ''}; };
       var teams = {left:[fx(setup.me), dubsNow ? fx(setup.partner) : null].filter(Boolean), right:[fx(setup.opp1), dubsNow ? fx(setup.opp2) : null].filter(Boolean), winner: result === 'W' ? 'left' : 'right'};
       var flawless = result === 'W' && margin >= fullStocks(mode, stocks);
@@ -791,7 +867,8 @@
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target && (e.target.id === 'email' || e.target.id === 'password')) auth(false);
-    if (e.key === 'Escape'){ if (S.picker) closePicker(); else if (S.pending){ S.pending = null; drawSheet(); } }
+    if (e.key === 'Enter' && e.target && e.target.id === 'rivalName'){ e.preventDefault(); rivalSet(e.target.value); }
+    if (e.key === 'Escape'){ if (S.picker) closePicker(); else if (S.pending){ S.pending = null; drawSheet(); } else if (S.rival){ S.rival = null; drawSheet(); } }
   });
   document.getElementById('search').addEventListener('input', function(e){ S.search = e.target.value || ''; drawPicker(); });
 
