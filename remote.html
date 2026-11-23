@@ -229,6 +229,37 @@
   .sheet .kos { display:flex; flex-wrap:wrap; gap:6px; font-size:11px; font-weight:800; letter-spacing:.1em; }
   .sheet .kos span { padding:5px 9px; border-radius:20px; background:#efece2; }
 
+  /* photo log */
+  .phgo { display:flex; align-items:center; justify-content:center; gap:8px; padding:13px; border-radius:14px; background:#18181f; color:#fff; font-size:13px; letter-spacing:.08em; cursor:pointer; }
+  .phgo input, .phsheet input[type=file] { display:none; }
+  .phsheet { max-height:92vh; overflow:auto; }
+  .phsheet .pv { width:100%; min-height:150px; height:min(28vh,220px); border-radius:12px; background:#0c0c10 center/contain no-repeat; }
+  .phsheet .st { padding:10px 12px; border-radius:12px; background:#efece2; font-size:12.5px; font-weight:700; line-height:1.4; display:flex; flex-direction:column; gap:6px; }
+  .phsheet .st.ok { background:#dcefe3; } .phsheet .st.err { background:#f9dfe2; }
+  .phsheet .st small { font-size:11px; font-weight:600; opacity:.65; }
+  .phsheet .bar { height:6px; border-radius:6px; background:rgba(23,20,15,.12); overflow:hidden; }
+  .phsheet .bar i { display:block; height:100%; background:linear-gradient(90deg,#ffd200,#f39a1e); }
+  .phsheet .wl2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .phsheet .wl2 button { padding:14px; border-radius:12px; color:#fff; font-size:18px; letter-spacing:.06em; opacity:.4; }
+  .phsheet .wl2 button.on { opacity:1; box-shadow:inset 0 0 0 4px #ffd200; }
+  .phsheet .wl2 .w { background:#25ad49; } .phsheet .wl2 .l { background:#e4202d; }
+  .phsheet .chips { display:flex; flex-wrap:wrap; gap:7px; }
+  .phsheet .chips button { min-width:44px; padding:10px; border-radius:10px; border:1px solid rgba(23,20,15,.14); background:var(--paper); font-size:15px; }
+  .phsheet .chips button.on { background:#ffd200; border-color:#ffd200; color:#18181f; }
+  .phsheet .steps { display:flex; flex-wrap:wrap; gap:8px; }
+  .phsheet .steps > div { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background:#efece2; font-size:11px; font-weight:800; letter-spacing:.08em; }
+  .phsheet .steps button { width:32px; height:32px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:16px; }
+  .phsheet .steps b { min-width:18px; text-align:center; font-size:16px; }
+  .phsheet .lbl2 { font-size:10px; font-weight:900; letter-spacing:.16em; opacity:.6; }
+  .phsheet .note { font-size:11px; font-weight:600; opacity:.6; line-height:1.4; }
+  .phsheet .row2 label { display:flex; align-items:center; justify-content:center; padding:13px; border-radius:14px; border:1px solid rgba(23,20,15,.12); font-size:13px; letter-spacing:.08em; cursor:pointer; }
+  .phsheet .go { background:linear-gradient(135deg,#3cc464,#25ad49 50%,#127a30) !important; color:#fff !important; border:none !important; }
+  .phsheet .go[disabled] { opacity:.45; filter:grayscale(1); }
+  :root[data-theme="dark"] .phsheet .st,:root[data-theme="dark"] .phsheet .steps > div,:root[data-theme="dark"] .phsheet .chips button:not(.on),:root[data-theme="dark"] .phsheet .row2 label{background:#2a2b34 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.14) !important}
+  :root[data-theme="dark"] .phsheet .st.ok{background:rgba(37,173,73,.24) !important} :root[data-theme="dark"] .phsheet .st.err{background:rgba(228,32,45,.24) !important}
+  :root[data-theme="dark"] .phsheet .steps button{background:#ececf1;color:#18181f}
+  :root[data-theme="dark"] .phgo{box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+
   /* picker */
   .picker { position:fixed; inset:0; z-index:50; background:var(--bg); display:flex; flex-direction:column; animation:rise .18s var(--ease); }
   .picker .ph { display:flex; align-items:center; gap:10px; padding:calc(12px + env(safe-area-inset-top)) 14px 10px; background:var(--pine); color:var(--paper); }
@@ -384,6 +415,7 @@
 <script src="sync.js"></script>
 <script>window.SMASH_SILENT = true; // sounds play on the tracker (computer), not on the phone</script>
 <script src="fx.js"></script>
+<script src="photolog.js"></script>
 <script>
 (function(){
   'use strict';
@@ -404,7 +436,7 @@
 
   // ---------- data: this phone's copy of the cloud ----------
   var D = {uid:'', matches:[], kv:{}};
-  var S = {sync:{phase:'loading'}, view:'log', pending:null, rival:null, picker:null, search:'', undoArm:null, busy:false, err:'', fighters:[], byId:{}};
+  var S = {sync:{phase:'loading'}, view:'log', photo:null, pending:null, rival:null, picker:null, search:'', undoArm:null, busy:false, err:'', fighters:[], byId:{}};
 
   function load(){
     try {
@@ -570,6 +602,7 @@
     };
     out += '<div class="kos2">' + ko('koMe', "COOPER'S KOs") + (dubs ? ko('koNathan', "NATHAN'S KOs") : '') + '</div>';
     out += '<div class="wl"><button class="big win" data-act="result" data-v="W"><b>WIN</b><i>THEN PICK STOCKS</i></button><button class="big loss" data-act="result" data-v="L"><b>LOSS</b><i>THEN PICK STOCKS</i></button></div>';
+    out += '<label class="phgo blk">\ud83d\udcf7 LOG FROM A PHOTO<input type="file" accept="image/*" capture="environment" data-photo="1"></label>';
 
     var last = D.matches[D.matches.length - 1];
     var today = todayMatches();
@@ -687,6 +720,7 @@
 
   function drawSheet(){
     var el = document.getElementById('sheet');
+    if (S.photo && signedIn()) return setHtml(el, photoSheet());
     if (S.rival){
       var lastG = D.matches[D.matches.length - 1];
       if (!lastG || lastG.id !== S.rival.id || lastG.vs || (get('rivalNo') || []).indexOf(S.rival.key) > -1) S.rival = null;
@@ -723,6 +757,50 @@
       '<div class="kos">'+kos+'</div>' +
       '<div class="row2"><button class="blk" data-act="cancel">CANCEL</button><button class="blk dark" data-act="stock" data-v="0">SKIP STOCKS</button></div>' +
     '</div></div>');
+  }
+
+  // ---------- photo log: read the results screen (photolog.js), confirm, then log ----------
+  function photoRead(file){
+    if (!file) return;
+    if (S.photo && S.photo.url) try { URL.revokeObjectURL(S.photo.url); } catch(e){}
+    var token = Date.now(), dubs = get('mode') === 'doubles', stocks = Number(get('stocks')) || 3;
+    S.photo = {url:URL.createObjectURL(file), busy:true, pct:0, label:'Opening the photo', token:token, result:null, margin:null};
+    S.pending = null; buzz(); drawSheet();
+    var upd = function(patch){ if (S.photo && S.photo.token === token){ Object.assign(S.photo, patch); drawSheet(); } };
+    if (!window.SmashPhoto){ upd({busy:false, done:true, err:'The photo reader did not load. Check your internet and reload.', koMe:0, koNathan:0}); return; }
+    window.SmashPhoto.read(file, {mode:get('mode'), stocks:stocks, onProgress:function(pct, label){ upd({pct:pct, label:label}); }})
+      .then(function(r){
+        var full = fullStocks(get('mode'), stocks);
+        upd({busy:false, done:true, read:r, result:r.result, margin: r.margin === null ? null : Math.min(full, r.margin), koMe: r.koMe || 0, koNathan: dubs ? (r.koNathan || 0) : 0});
+        if (r.result) buzz([15, 30, 15]);
+      })
+      .catch(function(e){ upd({busy:false, done:true, err:(e && e.message) || 'Could not read that photo.', read:null, result:null, margin:null, koMe:0, koNathan:0}); });
+  }
+  function photoClose(){ if (S.photo) try { URL.revokeObjectURL(S.photo.url); } catch(e){} S.photo = null; drawSheet(); }
+  function photoSheet(){
+    var p = S.photo, dubs = get('mode') === 'doubles', stocks = Number(get('stocks')) || 3, full = fullStocks(get('mode'), stocks), r = p.read;
+    var out = '<div class="scrim" data-act="photoClose"><div class="sheet phsheet" data-stop="1">' +
+      '<div class="sub">PHOTO LOG \u00b7 '+(dubs ? '2V2' : '1V1')+' \u00b7 '+stocks+' STOCK</div>' +
+      '<div class="pv" style="background-image:url('+p.url+')"></div>';
+    if (p.busy) out += '<div class="st"><span>'+esc(p.label || 'Reading')+(p.pct ? ' \u00b7 '+p.pct+'%' : '')+'\u2026</span><div class="bar"><i style="width:'+Math.max(4, Math.min(100, p.pct || 0))+'%"></i></div></div>';
+    if (p.err) out += '<div class="st err">'+esc(p.err)+'</div>';
+    if (p.done){
+      var conf = r ? r.confidence : 'none';
+      var head = !r ? 'Pick the result yourself' : !r.result ? 'Couldn\u2019t tell who won \u2014 pick it below'
+        : (r.result === 'W' ? 'Looks like a WIN' : 'Looks like a LOSS') + (conf === 'low' ? ' (not sure)' : '') + (p.margin === null ? ' \u00b7 set the stocks' : ' \u00b7 ' + p.margin + ' stock' + (p.margin === 1 ? '' : 's') + ' left');
+      out += '<div class="st'+(r && r.result && conf === 'high' ? ' ok' : '')+'"><span>'+esc(head)+'</span><small>'+esc(r ? r.summary : 'You can still log it by hand here.')+'</small></div>';
+      out += '<span class="lbl2">RESULT</span><div class="wl2"><button class="blk w'+(p.result === 'W' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="W">WIN</button><button class="blk l'+(p.result === 'L' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="L">LOSS</button></div>';
+      var chips = '';
+      for (var i = 0; i <= full; i++) chips += '<button class="blk'+(p.margin === i ? ' on' : '')+'" data-act="photoSet" data-k="margin" data-v="'+i+'">'+i+'</button>';
+      out += '<span class="lbl2">'+(p.result === 'L' ? 'STOCKS THEY HAD LEFT' : 'STOCKS YOU HAD LEFT')+'</span><div class="chips">'+chips+'</div>';
+      var step = function(label, key){ return '<div><span>'+label+'</span><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="-1" aria-label="minus">\u2212</button><b class="blk">'+(p[key] || 0)+'</b><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="1" aria-label="plus">+</button></div>'; };
+      out += '<span class="lbl2">KOs</span><div class="steps">'+step('COOPER', 'koMe')+(dubs ? step('NATHAN', 'koNathan') : '')+'</div>';
+    }
+    out += '<button class="go blk" data-act="photoLog"'+(!p.result || p.busy ? ' disabled' : '')+'>\u2713 LOG IT</button>' +
+      '<div class="row2"><label class="blk">\u21ba RETAKE<input type="file" accept="image/*" capture="environment" data-photo="1"></label><button class="blk" data-act="photoClose">CANCEL</button></div>' +
+      '<span class="note">Uses the fighters and settings on this screen. P1 is Cooper'+(dubs ? ', P2 is Nathan, P3 and P4 the other team' : ', P2 the opponent')+'. Fill the frame with the TV for the best read.</span>' +
+      '</div></div>';
+    return out;
   }
 
   // ---------- picker ----------
@@ -884,6 +962,23 @@
       S.pending = el.dataset.v; buzz([15, 30, 15]); drawSheet();
     },
     cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
+    photoClose: photoClose,
+    photoSet: function(el){ if (!S.photo) return; S.photo[el.dataset.k] = el.dataset.k === 'margin' ? Number(el.dataset.v) : el.dataset.v; buzz(10); drawSheet(); },
+    photoKo: function(el){
+      if (!S.photo) return;
+      var full = fullStocks(get('mode'), Number(get('stocks')) || 3), k = el.dataset.k;
+      S.photo[k] = Math.max(0, Math.min(full, (S.photo[k] || 0) + Number(el.dataset.d))); buzz(10); drawSheet();
+    },
+    photoLog: function(){
+      var p = S.photo;
+      if (!p || !p.result || p.busy) return;
+      // the photo reads Cooper's side; logGame flips the tapped result when hand-off is on, so flip it first
+      var res = get('handoffOn') ? (p.result === 'W' ? 'L' : 'W') : p.result;
+      D.kv = Object.assign({}, D.kv, {koMe:p.koMe || 0, koNathan: get('mode') === 'doubles' ? (p.koNathan || 0) : 0});
+      try { URL.revokeObjectURL(p.url); } catch(e){}
+      S.photo = null; S.pending = res;
+      handlers.stock({dataset:{v:String(p.margin === null ? 0 : p.margin)}});
+    },
     rivalPick: function(el){ rivalSet(el.dataset.v); },
     rivalSave: function(){ var i = document.getElementById('rivalName'); rivalSet(i ? i.value : ''); },
     rivalCpu: function(){
@@ -946,14 +1041,20 @@
   document.addEventListener('click', function(e){
     var el = e.target.closest('[data-act]');
     if (!el) return;
-    if (el.dataset.act === 'cancel' && e.target.closest('[data-stop]') && !e.target.closest('button')) return;
+    if ((el.dataset.act === 'cancel' || el.dataset.act === 'photoClose') && e.target.closest('[data-stop]') && !e.target.closest('button')) return;
     var fn = handlers[el.dataset.act];
     if (fn){ e.preventDefault(); uiSound(el); fn(el); }
   });
   document.addEventListener('keydown', function(e){
     if (e.key === 'Enter' && e.target && (e.target.id === 'email' || e.target.id === 'password')) auth(false);
     if (e.key === 'Enter' && e.target && e.target.id === 'rivalName'){ e.preventDefault(); rivalSet(e.target.value); }
-    if (e.key === 'Escape'){ if (S.picker) closePicker(); else if (S.pending){ S.pending = null; drawSheet(); } else if (S.rival){ S.rival = null; drawSheet(); } }
+    if (e.key === 'Escape'){ if (S.photo) photoClose(); else if (S.picker) closePicker(); else if (S.pending){ S.pending = null; drawSheet(); } else if (S.rival){ S.rival = null; drawSheet(); } }
+  });
+  document.addEventListener('change', function(e){
+    var t = e.target;
+    if (!t || !t.matches || !t.matches('input[data-photo]')) return;
+    var f = t.files && t.files[0]; t.value = '';
+    photoRead(f);
   });
   document.getElementById('search').addEventListener('input', function(e){ S.search = e.target.value || ''; drawPicker(); });
 
