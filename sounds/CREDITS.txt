@@ -87,7 +87,8 @@ COMMENTATOR VOICE (voice/)
 --------------------------
 The quips in voice/ were generated for this app with the open-source Kokoro-82M
 text-to-speech model (Apache 2.0, https://huggingface.co/hexgrad/Kokoro-82M), using
-its "Heart" (vo-heart-*) and "Michael" (vo-michael-*) voices. Every clip was checked
+its "Heart" (vo-heart-*) and "Michael" (vo-michael-*) voices, plus three packs with their own
+lines: Hype (vo-hype-*, "Puck" voice), Salty (vo-salty-*, "Fenrir") and British (vo-brit-*, "George"). Every clip was checked
 with speech recognition to make sure it says what it should.
 
 All other sounds are synthesized in fx.js.

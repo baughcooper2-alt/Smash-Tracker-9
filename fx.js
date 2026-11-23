@@ -2,7 +2,7 @@
 //   SmashFX.result({kind:'win'|'loss'|'perfect', title, sub})  full-screen result animation
 //   SmashFX.snow(on)                                             falling snow behind everything clickable
 //   SmashFX.soundOn() / SmashFX.setSound(on)                     sound effects on or off (saved per device)
-//   SmashFX.voice() / SmashFX.setVoice('heart'|'michael'|'off')  commentator voice quips (saved per device)
+//   SmashFX.voice() / SmashFX.setVoice('heart'|'michael'|'hype'|'salty'|'brit'|'custom'|'off')  commentator (per device)
 // result() also takes quip:'six'|'stomp'|'closeW'|'closeL'|'bad'|'win'|'loss'|'hotW'|'coldL', duo:true for 2v2,
 // and teams:{left:[{name,img,color}], right:[...], winner:'left'|'right'} for the GAME! results screen.
 // Result sounds are recorded clips in sounds/ (credits in sounds/CREDITS.txt); interface sounds are synthesized.
@@ -311,20 +311,58 @@
     hotW: [['hot1'], ['hot2'], ['hot3', 1]],
     coldL: [['cold1'], ['cold2'], ['cold3']]
   };
-  var VOICES = ['heart', 'michael'];
+  // Packs: the classic lines (two voices), plus hype, salty and British packs. 'custom' speaks the user's own lines
+  // with the device's built-in voice (window.speechSynthesis); 'mix' slips those lines into any pack now and then.
+  var PACKS = {classic: QUIPS,
+    hype: {six: [['six1'], ['six2'], ['six3', 1], ['six4'], ['six5']], stomp: [['st1'], ['st2'], ['st3'], ['st4', 1], ['st5']], closeW: [['cw1'], ['cw2'], ['cw3'], ['cw4']], closeL: [['cl1'], ['cl2'], ['cl3'], ['cl4']], bad: [['bd1'], ['bd2'], ['bd3'], ['bd4']], win: [['w1'], ['w2'], ['w3']], loss: [['l1'], ['l2'], ['l3']], hotW: [['h1'], ['h2'], ['h3', 1]], coldL: [['c1'], ['c2'], ['c3']]},
+    salty: {six: [['six1'], ['six2'], ['six3']], stomp: [['st1'], ['st2'], ['st3'], ['st4', 1]], closeW: [['cw1'], ['cw2'], ['cw3']], closeL: [['cl1'], ['cl2'], ['cl3']], bad: [['bd1'], ['bd2'], ['bd3'], ['bd4', 1], ['bd5']], win: [['w1'], ['w2'], ['w3']], loss: [['l1'], ['l2'], ['l3']], hotW: [['h1'], ['h2']], coldL: [['c1'], ['c2'], ['c3']]},
+    brit: {six: [['six1'], ['six2'], ['six3'], ['six4', 1]], stomp: [['st1'], ['st2'], ['st3'], ['st4']], closeW: [['cw1'], ['cw2'], ['cw3']], closeL: [['cl1'], ['cl2'], ['cl3', 1]], bad: [['bd1'], ['bd2'], ['bd3'], ['bd4']], win: [['w1'], ['w2'], ['w3']], loss: [['l1', 1], ['l2'], ['l3']], hotW: [['h1'], ['h2']], coldL: [['c1'], ['c2']]}};
+  var VOICE_PACK = {heart:'classic', michael:'classic', hype:'hype', salty:'salty', brit:'brit'};
+  var VOICES = ['heart', 'michael', 'hype', 'salty', 'brit', 'custom'];
   function voice(){ var v = 'heart'; try { v = localStorage.getItem('stocklog.voice') || 'heart'; } catch(e){} return v === 'off' || VOICES.indexOf(v) >= 0 ? v : 'heart'; }
+  function clipVoice(v){ return v === 'custom' ? 'heart' : v; }
+  function customLines(cat){
+    var all = {}; try { all = JSON.parse(localStorage.getItem('stocklog.voiceLines') || '{}') || {}; } catch(e){}
+    return String(all[cat] || '').split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+  }
+  function mixOn(){ try { return localStorage.getItem('stocklog.voiceMix') === 'on'; } catch(e){ return false; } }
+  var deviceVoice = null;
+  function pickDeviceVoice(){
+    if (deviceVoice || !window.speechSynthesis) return deviceVoice;
+    var vs = speechSynthesis.getVoices() || [];
+    var en = vs.filter(function(x){ return /^en/i.test(x.lang); });
+    deviceVoice = en.filter(function(x){ return /natural|neural|google|samantha|daniel|aria|guy/i.test(x.name); })[0] || en[0] || vs[0] || null;
+    return deviceVoice;
+  }
+  if (window.speechSynthesis){ try { speechSynthesis.onvoiceschanged = function(){ deviceVoice = null; pickDeviceVoice(); }; } catch(e){} }
+  // Speak text with the device voice after `delay` seconds; returns a rough length so music can duck under it.
+  function speak(text, delay){
+    if (!window.speechSynthesis || !text) return 0;
+    setTimeout(function(){
+      try { var u = new SpeechSynthesisUtterance(text); var dv = pickDeviceVoice(); if (dv) u.voice = dv; u.rate = 1.05; u.pitch = 1; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch(e){}
+    }, Math.max(0, delay || 0) * 1000);
+    if (window.__sfxLog) window.__sfxLog.push('speak:' + text);
+    return Math.min(4, .5 + text.length * .065);
+  }
   function setVoice(v){
     lastSpecific = performance.now();
     try { localStorage.setItem('stocklog.voice', v); } catch(e){}
-    if (v !== 'off' && soundOn() && audio()){ preloadVoice(v, function(){ say('win', false, actx.currentTime + .05); }); }
+    preview(v);
+  }
+  function preview(v, cat){
+    if (v === 'off' || !soundOn() || !audio()) return;
+    cat = cat || ['six', 'stomp', 'bad', 'closeW'][Math.floor(Math.random() * 4)];
+    if (v === 'custom'){ var ls = customLines(cat).concat(customLines('win')); if (ls.length) return speak(ls[Math.floor(Math.random() * ls.length)], 0); }
+    preloadVoice(clipVoice(v), function(){ say(cat, true, actx.currentTime + .05, clipVoice(v), true); });
   }
   var voiceLoaded = {}, recentQuips = [];
   function preloadVoice(v, done){
-    if (!actx || v === 'off' || VOICES.indexOf(v) < 0) return;
+    v = clipVoice(v);
+    if (!actx || v === 'off' || !VOICE_PACK[v]) return;
     if (voiceLoaded[v]){ if (done && voiceLoaded[v] === 2) done(); return; }
     voiceLoaded[v] = 1;
-    var ids = [];
-    Object.keys(QUIPS).forEach(function(k){ QUIPS[k].forEach(function(q){ ids.push(q[0]); }); });
+    var pack = PACKS[VOICE_PACK[v]], ids = [];
+    Object.keys(pack).forEach(function(k){ pack[k].forEach(function(q){ ids.push(q[0]); }); });
     var left = ids.length;
     ids.forEach(function(id){
       var n = 'vo-' + v + '-' + id;
@@ -334,16 +372,28 @@
         .then(function(){ if (--left === 0){ voiceLoaded[v] = 2; if (done) done(); } });
     });
   }
-  // Speak one quip from a category at time t; returns its length (0 if voice is off or not loaded).
-  function say(cat, duo, t){
-    var v = voice();
-    if (v === 'off' || !QUIPS[cat] || !actx) return 0;
-    var pool = QUIPS[cat].filter(function(q){ return (!q[1] || duo) && buffers['vo-' + v + '-' + q[0]]; });
+  // Speak one quip from a category at time t; returns its length (0 if voice is off or nothing is ready).
+  function say(cat, duo, t, forceVoice, noCustom){
+    var v = forceVoice || voice();
+    if (v === 'off' || !actx) return 0;
+    if (!noCustom && (v === 'custom' || mixOn())){
+      var mine = customLines(cat);
+      if (mine.length && (v === 'custom' || Math.random() < .35)){
+        var pickL = mine.filter(function(x){ return recentQuips.indexOf(x) < 0; }); pickL = pickL.length ? pickL : mine;
+        var line = pickL[Math.floor(Math.random() * pickL.length)];
+        recentQuips.push(line); if (recentQuips.length > 6) recentQuips.shift();
+        return speak(line, t - actx.currentTime);
+      }
+    }
+    v = clipVoice(v);
+    var pack = PACKS[VOICE_PACK[v]];
+    if (!pack || !pack[cat]) return 0;
+    var pool = pack[cat].filter(function(q){ return (!q[1] || duo) && buffers['vo-' + v + '-' + q[0]]; });
     if (!pool.length) return 0;
-    var fresh = pool.filter(function(q){ return recentQuips.indexOf(q[0]) < 0; });
+    var fresh = pool.filter(function(q){ return recentQuips.indexOf(v + q[0]) < 0; });
     var q = (fresh.length ? fresh : pool)[Math.floor(Math.random() * (fresh.length ? fresh : pool).length)];
-    recentQuips.push(q[0]); if (recentQuips.length > 6) recentQuips.shift();
-    if (window.__sfxLog) window.__sfxLog.push('voice:' + q[0]);
+    recentQuips.push(v + q[0]); if (recentQuips.length > 6) recentQuips.shift();
+    if (window.__sfxLog) window.__sfxLog.push('voice:' + v + ':' + q[0]);
     var src = actx.createBufferSource(), g = actx.createGain();
     src.buffer = buffers['vo-' + v + '-' + q[0]]; g.gain.value = 1.15;
     src.connect(g); g.connect(master); send(actx, g, .04);
@@ -734,6 +784,8 @@
   window.SmashFX = {result:result, snow:snow, clear:clear, soundOn:soundOn, setSound:setSound, ui:ui, voice:voice, setVoice:setVoice,
     // achievements and other moments: a quip on its own (when sound and voice are on)
     say:function(cat, duo){ if (soundOn() && audio()) say(cat, duo, actx.currentTime + .05); },
+    preview:function(v, cat){ preview(v, cat); },
+    speak:function(text){ if (soundOn()) speak(text, 0); },
     // test hook: render a sound into any AudioContext (e.g. an OfflineAudioContext)
     _renderSound:function(kind, ctx){ var dest = out(ctx, ctx.destination); return build(kind, ctx, dest, .02); }};
 })();
