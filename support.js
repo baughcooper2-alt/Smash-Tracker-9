@@ -633,7 +633,10 @@
         getReact().Fragment,
         { key },
         list.map((item, i) => {
-          const sub = { ...vals, [asName]: item, $index: i };
+          // Hand patch (Smash Tracker): inherit from vals instead of copying every key for every list item.
+          // resolvePath only reads vals[name], so a prototype chain resolves the same; on big tabs this cuts
+          // render time a lot. Re-apply if this file is ever regenerated (also patched in index.html's bundle).
+          const sub = Object.create(vals); sub[asName] = item; sub.$index = i;
           return h(
             getReact().Fragment,
             { key: i },
