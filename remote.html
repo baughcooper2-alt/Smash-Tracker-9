@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Smash Remote</title>
 <meta name="theme-color" content="#18181f">
+<script>(function(){ try { var p = localStorage.getItem('stocklog.theme') || 'auto';
+  var d = p === 'dark' || (p === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light'); } catch(e){} })();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -332,6 +335,30 @@
   .sheet{border-top:4px solid var(--sm-red)}
   .toast,#toast{border-left:5px solid var(--sm-yellow)}
   header .today .lbl{color:var(--sm-yellow) !important;opacity:1 !important}
+
+  /* ===== dark mode (shares the tracker's setting on this device: auto / dark / light) ===== */
+  :root[data-theme="dark"]{color-scheme:dark}
+  :root[data-theme="dark"],:root[data-theme="dark"] body{background-color:#111217 !important;color:#ececf1 !important}
+  :root[data-theme="dark"] body{background-image:linear-gradient(118deg,rgba(228,32,45,0) 0 58%,rgba(228,32,45,.1) 58% 71%,rgba(228,32,45,0) 71%),
+    repeating-linear-gradient(118deg,rgba(255,255,255,.025) 0 2px,rgba(255,255,255,0) 2px 24px) !important}
+  :root[data-theme="dark"] .card,:root[data-theme="dark"] .tile2:not(.gold),:root[data-theme="dark"] .sheet,:root[data-theme="dark"] .banner.wait,
+  :root[data-theme="dark"] .picker{background:#1f2027 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.1) !important;box-shadow:0 0 0 1px rgba(255,255,255,.05),0 14px 30px -18px rgba(0,0,0,.9) !important}
+  :root[data-theme="dark"] .picker{background:#111217 !important}
+  :root[data-theme="dark"] .fbtn,:root[data-theme="dark"] .ko button:not(.plus),:root[data-theme="dark"] .pills button:not(.on),:root[data-theme="dark"] .undo:not(.arm),
+  :root[data-theme="dark"] .pair input,:root[data-theme="dark"] .pair .alt,:root[data-theme="dark"] .sheet .rn input,:root[data-theme="dark"] .picker .srch input,
+  :root[data-theme="dark"] .sheet .rp button:not(.sug),:root[data-theme="dark"] .rvtag button,:root[data-theme="dark"] .sheet .kos span,:root[data-theme="dark"] .sheet .row2 button:not(.dark),
+  :root[data-theme="dark"] .stk button,:root[data-theme="dark"] .tile,:root[data-theme="dark"] .banner button,:root[data-theme="dark"] .pill{
+    background:#2a2b34 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.14) !important;box-shadow:none !important}
+  :root[data-theme="dark"] .sheet.W .stk button{background:rgba(37,173,73,.24) !important}
+  :root[data-theme="dark"] .sheet.L .stk button{background:rgba(228,32,45,.24) !important}
+  :root[data-theme="dark"] .stk button.flawless{color:#18181f !important}
+  :root[data-theme="dark"] .g.P,:root[data-theme="dark"] .tile2.gold{color:#18181f !important}
+  :root[data-theme="dark"] .ko button.plus{background:#ececf1 !important;color:#18181f !important;border-color:transparent !important}
+  :root[data-theme="dark"] .tile.on{box-shadow:0 0 0 3px #ffd200 !important}
+  :root[data-theme="dark"] .pair .err{background:rgba(212,40,58,.24) !important;color:#ececf1}
+  :root[data-theme="dark"] input::placeholder{color:rgba(236,236,241,.45)}
+  :root[data-theme="dark"] .sheet::before{background:rgba(255,255,255,.25)}
+  :root[data-theme="dark"] .foot,:root[data-theme="dark"] .foot a,:root[data-theme="dark"] .foot button{color:rgba(236,236,241,.7)}
 </style>
 </head>
 <body>
@@ -642,7 +669,7 @@
   function soundOn(){ try { return localStorage.getItem('stocklog.sound') !== 'off'; } catch(e){ return true; } }
   function snowOn(){ try { return localStorage.getItem('stocklog.snow') !== 'off'; } catch(e){ return true; } }
   function footView(){
-    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<a href="sounds/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">CREDITS</a></div>';
+    return '<div class="foot"><span>'+esc(S.sync.email || '')+'</span>·<button data-act="signout">SIGN OUT</button>·<button data-act="snow">'+(snowOn() ? 'SNOW OFF' : 'SNOW ON')+'</button>·<button data-act="theme">THEME: '+themePref().toUpperCase()+'</button>·<a href="sounds/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">CREDITS</a></div>';
   }
   function signInView(){
     return '<div class="card pair">' +
@@ -770,6 +797,15 @@
     drawSheet();
   }
   function changed(){ rivalWatch(); save(); if (sync) sync.notify(); render(); }
+  // ---------- theme: auto (follows the phone) / dark / light, shared with the tracker on this device ----------
+  function themePref(){ try { return localStorage.getItem('stocklog.theme') || 'auto'; } catch(e){ return 'auto'; } }
+  var schemeMq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  function applyTheme(){
+    var p = themePref(), d = p === 'dark' || (p === 'auto' && !!(schemeMq && schemeMq.matches));
+    document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
+  }
+  if (schemeMq){ try { schemeMq.addEventListener('change', applyTheme); } catch(e){ try { schemeMq.addListener(applyTheme); } catch(err){} } }
+  window.addEventListener('storage', function(e){ if (e.key === 'stocklog.theme') { applyTheme(); render(); } });
   function setKv(patch){ D.kv = Object.assign({}, D.kv, patch); changed(); }
 
   function logGame(result, margin){
@@ -805,6 +841,11 @@
     signin: function(){ auth(false); },
     signup: function(){ auth(true); },
     sound: function(){ var on = !soundOn(); if (window.SmashFX) window.SmashFX.setSound(on); else { try { localStorage.setItem('stocklog.sound', on ? 'on' : 'off'); } catch(e){} } toast(on ? 'SOUND ON' : 'SOUND OFF'); render(); },
+    theme: function(){
+      var cur = themePref(), next = cur === 'auto' ? 'dark' : cur === 'dark' ? 'light' : 'auto';
+      try { localStorage.setItem('stocklog.theme', next); } catch(e){}
+      applyTheme(); render(); toast(next === 'auto' ? 'THEME: AUTO' : next === 'dark' ? 'DARK MODE' : 'LIGHT MODE');
+    },
     snow: function(){ var on = !snowOn(); try { localStorage.setItem('stocklog.snow', on ? 'on' : 'off'); } catch(e){} if (window.SmashFX) window.SmashFX.snow(on); render(); },
     signout: function(){ if (sync) sync.signOut(); clearData(); S.pending = null; render(); },
     retry: function(){ if (sync) sync.refresh(); },
