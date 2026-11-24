@@ -246,18 +246,24 @@
   .phsheet .chips { display:flex; flex-wrap:wrap; gap:7px; }
   .phsheet .chips button { min-width:44px; padding:10px; border-radius:10px; border:1px solid rgba(23,20,15,.14); background:var(--paper); font-size:15px; }
   .phsheet .chips button.on { background:#ffd200; border-color:#ffd200; color:#18181f; }
-  .phsheet .steps { display:flex; flex-wrap:wrap; gap:8px; }
-  .phsheet .steps > div { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background:#efece2; font-size:11px; font-weight:800; letter-spacing:.08em; }
-  .phsheet .steps button { width:32px; height:32px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:16px; }
-  .phsheet .steps b { min-width:18px; text-align:center; font-size:16px; }
+  .phsheet .stats { display:flex; flex-direction:column; gap:6px; }
+  .phsheet .srow { display:grid; grid-template-columns:46px 1fr 1fr; gap:6px; align-items:center; }
+  .phsheet .stats.solo .srow { grid-template-columns:46px 1fr; }
+  .phsheet .srow.hd span { font-size:9.5px; font-weight:900; letter-spacing:.14em; opacity:.6; text-align:center; }
+  .phsheet .cell { display:flex; align-items:center; justify-content:space-between; padding:4px 6px; border-radius:10px; background:#efece2; }
+  .phsheet .cell button { width:30px; height:30px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:16px; }
+  .phsheet .cell b { font-size:16px; } .phsheet .cell b.unk { color:#c9961e; }
+  .phsheet .seen { font-size:11px; opacity:.75; } .phsheet .seen summary { cursor:pointer; }
+  .phsheet .seen span { display:block; margin-top:6px; padding:8px; border-radius:8px; background:rgba(23,20,15,.06); font-family:ui-monospace,monospace; word-break:break-word; }
+  :root[data-theme="dark"] .phsheet .cell{background:#2a2b34 !important} :root[data-theme="dark"] .phsheet .cell button{background:#ececf1;color:#18181f}
+  :root[data-theme="dark"] .phsheet .seen span{background:#2a2b34}
   .phsheet .lbl2 { font-size:10px; font-weight:900; letter-spacing:.16em; opacity:.6; }
   .phsheet .note { font-size:11px; font-weight:600; opacity:.6; line-height:1.4; }
   .phsheet .row2 label { display:flex; align-items:center; justify-content:center; padding:13px; border-radius:14px; border:1px solid rgba(23,20,15,.12); font-size:13px; letter-spacing:.08em; cursor:pointer; }
   .phsheet .go { background:linear-gradient(135deg,#3cc464,#25ad49 50%,#127a30) !important; color:#fff !important; border:none !important; }
   .phsheet .go[disabled] { opacity:.45; filter:grayscale(1); }
-  :root[data-theme="dark"] .phsheet .st,:root[data-theme="dark"] .phsheet .steps > div,:root[data-theme="dark"] .phsheet .chips button:not(.on),:root[data-theme="dark"] .phsheet .row2 label{background:#2a2b34 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.14) !important}
+  :root[data-theme="dark"] .phsheet .st,:root[data-theme="dark"] .phsheet .chips button:not(.on),:root[data-theme="dark"] .phsheet .row2 label{background:#2a2b34 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.14) !important}
   :root[data-theme="dark"] .phsheet .st.ok{background:rgba(37,173,73,.24) !important} :root[data-theme="dark"] .phsheet .st.err{background:rgba(228,32,45,.24) !important}
-  :root[data-theme="dark"] .phsheet .steps button{background:#ececf1;color:#18181f}
   :root[data-theme="dark"] .phgo{box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 
   /* picker */
@@ -767,14 +773,25 @@
     S.photo = {url:URL.createObjectURL(file), busy:true, pct:0, label:'Opening the photo', token:token, result:null, margin:null};
     S.pending = null; buzz(); drawSheet();
     var upd = function(patch){ if (S.photo && S.photo.token === token){ Object.assign(S.photo, patch); drawSheet(); } };
-    if (!window.SmashPhoto){ upd({busy:false, done:true, err:'The photo reader did not load. Check your internet and reload.', koMe:0, koNathan:0}); return; }
+    if (!window.SmashPhoto){ upd({busy:false, done:true, err:'The photo reader did not load. Check your internet and reload.'}); return; }
     window.SmashPhoto.read(file, {mode:get('mode'), stocks:stocks, onProgress:function(pct, label){ upd({pct:pct, label:label}); }})
       .then(function(r){
         var full = fullStocks(get('mode'), stocks);
-        upd({busy:false, done:true, read:r, result:r.result, margin: r.margin === null ? null : Math.min(full, r.margin), koMe: r.koMe || 0, koNathan: dubs ? (r.koNathan || 0) : 0});
+        upd({busy:false, done:true, read:r, result:r.result, margin: r.margin === null ? null : Math.min(full, r.margin), marginTouched:false,
+          koMe:r.koMe, koNathan:r.koNathan, fallsMe:r.fallsMe, fallsNathan:r.fallsNathan, sdMe:r.sdMe, sdNathan:r.sdNathan});
         if (r.result) buzz([15, 30, 15]);
       })
-      .catch(function(e){ upd({busy:false, done:true, err:(e && e.message) || 'Could not read that photo.', read:null, result:null, margin:null, koMe:0, koNathan:0}); });
+      .catch(function(e){ upd({busy:false, done:true, err:(e && e.message) || 'Could not read that photo.', read:null, result:null, margin:null}); });
+  }
+  // stocks left from the stats unless a stock chip was tapped: a win is your stocks minus your falls,
+  // a loss is their stocks minus your KOs
+  function photoMargin(p){
+    var dubs = get('mode') === 'doubles', full = fullStocks(get('mode'), Number(get('stocks')) || 3);
+    if (p.marginTouched) return p.margin;
+    var sum = function(a, b){ return dubs ? (a == null || b == null ? null : a + b) : (a == null ? null : a); };
+    if (p.result === 'W'){ var f = sum(p.fallsMe, p.fallsNathan); if (f !== null) return Math.max(0, Math.min(full, full - f)); }
+    if (p.result === 'L'){ var k = sum(p.koMe, p.koNathan); if (k !== null) return Math.max(1, Math.min(full, full - k)); }
+    return p.margin == null ? null : p.margin;
   }
   function photoClose(){ if (S.photo) try { URL.revokeObjectURL(S.photo.url); } catch(e){} S.photo = null; drawSheet(); }
   function photoSheet(){
@@ -785,20 +802,25 @@
     if (p.busy) out += '<div class="st"><span>'+esc(p.label || 'Reading')+(p.pct ? ' \u00b7 '+p.pct+'%' : '')+'\u2026</span><div class="bar"><i style="width:'+Math.max(4, Math.min(100, p.pct || 0))+'%"></i></div></div>';
     if (p.err) out += '<div class="st err">'+esc(p.err)+'</div>';
     if (p.done){
-      var conf = r ? r.confidence : 'none';
-      var head = !r ? 'Pick the result yourself' : !r.result ? 'Couldn\u2019t tell who won \u2014 pick it below'
-        : (r.result === 'W' ? 'Looks like a WIN' : 'Looks like a LOSS') + (conf === 'low' ? ' (not sure)' : '') + (p.margin === null ? ' \u00b7 set the stocks' : ' \u00b7 ' + p.margin + ' stock' + (p.margin === 1 ? '' : 's') + ' left');
-      out += '<div class="st'+(r && r.result && conf === 'high' ? ' ok' : '')+'"><span>'+esc(head)+'</span><small>'+esc(r ? r.summary : 'You can still log it by hand here.')+'</small></div>';
+      var conf = r ? r.confidence : 'none', mg = photoMargin(p), per = stocks;
+      var head = !r ? 'Pick the result yourself'
+        : !r.result ? (r.summary.indexOf('Couldn') === 0 ? 'Couldn’t read the stats — set it below' : 'Couldn’t tell who won — pick it below')
+        : (r.result === 'W' ? 'Looks like a WIN' : 'Looks like a LOSS') + (conf === 'low' ? ' (not sure)' : '') + (mg === null ? ' · set the stocks' : ' · ' + mg + ' stock' + (mg === 1 ? '' : 's') + ' left');
+      var how = r && r.how ? 'How: ' + r.how + (r.marginHow && !p.marginTouched ? '; stocks = ' + r.marginHow : '') + '.' : '';
+      out += '<div class="st'+(r && r.result && conf === 'high' ? ' ok' : '')+'"><span>'+esc(head)+'</span>'+(how ? '<small>'+esc(how)+'</small>' : '')+'<small>'+esc(r ? r.summary : 'You can still log it by hand here.')+'</small></div>';
       out += '<span class="lbl2">RESULT</span><div class="wl2"><button class="blk w'+(p.result === 'W' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="W">WIN</button><button class="blk l'+(p.result === 'L' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="L">LOSS</button></div>';
       var chips = '';
-      for (var i = 0; i <= full; i++) chips += '<button class="blk'+(p.margin === i ? ' on' : '')+'" data-act="photoSet" data-k="margin" data-v="'+i+'">'+i+'</button>';
+      for (var i = 0; i <= full; i++) chips += '<button class="blk'+(mg === i ? ' on' : '')+'" data-act="photoSet" data-k="margin" data-v="'+i+'">'+i+'</button>';
       out += '<span class="lbl2">'+(p.result === 'L' ? 'STOCKS THEY HAD LEFT' : 'STOCKS YOU HAD LEFT')+'</span><div class="chips">'+chips+'</div>';
-      var step = function(label, key){ return '<div><span>'+label+'</span><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="-1" aria-label="minus">\u2212</button><b class="blk">'+(p[key] || 0)+'</b><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="1" aria-label="plus">+</button></div>'; };
-      out += '<span class="lbl2">KOs</span><div class="steps">'+step('COOPER', 'koMe')+(dubs ? step('NATHAN', 'koNathan') : '')+'</div>';
+      var cell = function(key, max){ var v = p[key]; return '<div class="cell"><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="-1" data-max="'+max+'" aria-label="minus">−</button><b class="blk'+(v == null ? ' unk' : '')+'">'+(v == null ? '?' : v)+'</b><button class="blk" data-act="photoKo" data-k="'+key+'" data-d="1" data-max="'+max+'" aria-label="plus">+</button></div>'; };
+      var srow = function(label, a, b2, max){ return '<div class="srow"><span class="lbl2">'+label+'</span>'+cell(a, max)+(dubs ? cell(b2, max) : '')+'</div>'; };
+      out += '<div class="stats'+(dubs ? '' : ' solo')+'"><div class="srow hd"><span></span><span>COOPER</span>'+(dubs ? '<span>NATHAN</span>' : '')+'</div>' +
+        srow('KOs', 'koMe', 'koNathan', full) + srow('FALLS', 'fallsMe', 'fallsNathan', per) + srow('SDs', 'sdMe', 'sdNathan', per) + '</div>';
+      out += '<details class="seen"><summary class="lbl2">WHAT THE CAMERA READ</summary><span>'+esc(r && r.seen ? r.seen : '(nothing)')+'</span></details>';
     }
     out += '<button class="go blk" data-act="photoLog"'+(!p.result || p.busy ? ' disabled' : '')+'>\u2713 LOG IT</button>' +
       '<div class="row2"><label class="blk">\u21ba RETAKE<input type="file" accept="image/*" capture="environment" data-photo="1"></label><button class="blk" data-act="photoClose">CANCEL</button></div>' +
-      '<span class="note">Uses the fighters and settings on this screen. P1 is Cooper'+(dubs ? ', P2 is Nathan, P3 and P4 the other team' : ', P2 the opponent')+'. Fill the frame with the TV for the best read.</span>' +
+      '<span class="note">Reads only your team: the far-left column is Cooper'+(dubs ? ' and the one next to it is Nathan' : '')+'. Fighters and settings come from this screen. Get the KOs, Falls and SDs rows in the shot and fill the frame with the TV.</span>' +
       '</div></div>';
     return out;
   }
@@ -888,6 +910,7 @@
   window.addEventListener('storage', function(e){ if (e.key === 'stocklog.theme') { applyTheme(); render(); } });
   function setKv(patch){ D.kv = Object.assign({}, D.kv, patch); changed(); }
 
+  var pendingExtra = null;
   function logGame(result, margin){
     var mode = get('mode'), dubs = mode === 'doubles', swap = !!get('handoffOn');
     var me = get('me'), partner = get('partner'), opp1 = get('opp1'), opp2 = get('opp2');
@@ -909,6 +932,7 @@
       koNathan: Number(get('koNathan')) || 0,
       stocks: Number(get('stocks')) || 3
     };
+    if (pendingExtra){ Object.assign(m, pendingExtra); pendingExtra = null; }
     D.matches = D.matches.concat([m]);
     D.kv = Object.assign({}, D.kv, {koMe:0, koNathan:0});
     changed();
@@ -963,21 +987,31 @@
     },
     cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
     photoClose: photoClose,
-    photoSet: function(el){ if (!S.photo) return; S.photo[el.dataset.k] = el.dataset.k === 'margin' ? Number(el.dataset.v) : el.dataset.v; buzz(10); drawSheet(); },
+    photoSet: function(el){
+      if (!S.photo) return;
+      if (el.dataset.k === 'margin'){ S.photo.margin = Number(el.dataset.v); S.photo.marginTouched = true; }
+      else { S.photo[el.dataset.k] = el.dataset.v; S.photo.margin = photoMargin(S.photo); }
+      buzz(10); drawSheet();
+    },
     photoKo: function(el){
       if (!S.photo) return;
-      var full = fullStocks(get('mode'), Number(get('stocks')) || 3), k = el.dataset.k;
-      S.photo[k] = Math.max(0, Math.min(full, (S.photo[k] || 0) + Number(el.dataset.d))); buzz(10); drawSheet();
+      var k = el.dataset.k, max = Number(el.dataset.max) || 6, cur = S.photo[k], d = Number(el.dataset.d);
+      S.photo[k] = cur == null ? (d > 0 ? 0 : 0) : Math.max(0, Math.min(max, cur + d));
+      S.photo.margin = photoMargin(S.photo); buzz(10); drawSheet();
     },
     photoLog: function(){
       var p = S.photo;
       if (!p || !p.result || p.busy) return;
       // the photo reads Cooper's side; logGame flips the tapped result when hand-off is on, so flip it first
       var res = get('handoffOn') ? (p.result === 'W' ? 'L' : 'W') : p.result;
-      D.kv = Object.assign({}, D.kv, {koMe:p.koMe || 0, koNathan: get('mode') === 'doubles' ? (p.koNathan || 0) : 0});
+      var dubs = get('mode') === 'doubles', mg = photoMargin(p);
+      D.kv = Object.assign({}, D.kv, {koMe:p.koMe || 0, koNathan: dubs ? (p.koNathan || 0) : 0});
+      var extra = {photo:true};
+      (dubs ? ['fallsMe', 'sdMe', 'fallsNathan', 'sdNathan'] : ['fallsMe', 'sdMe']).forEach(function(k){ if (p[k] != null) extra[k] = p[k]; });
+      pendingExtra = extra;
       try { URL.revokeObjectURL(p.url); } catch(e){}
       S.photo = null; S.pending = res;
-      handlers.stock({dataset:{v:String(p.margin === null ? 0 : p.margin)}});
+      handlers.stock({dataset:{v:String(mg == null ? 0 : mg)}});
     },
     rivalPick: function(el){ rivalSet(el.dataset.v); },
     rivalSave: function(){ var i = document.getElementById('rivalName'); rivalSet(i ? i.value : ''); },
