@@ -73,17 +73,22 @@
   }
   // grey: high-contrast greyscale. inv: the same, flipped (white text on dark panels becomes dark on light).
   // masks: small black/white maps of bright pixels, for the big placement digit.
-  function prepare(file){
+  function loadImage(file){
     return new Promise(function(res, rej){
       var url = URL.createObjectURL(file), img = new Image();
-      img.onload = function(){
-        var k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
-        var w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      img.onload = function(){ URL.revokeObjectURL(url); res(img); };
+      img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('That file is not a picture I can open.')); };
+      img.src = url;
+    });
+  }
+  // Everything the reader works on, made from one region of the photo (sx, sy, sw, sh) scaled by k.
+  function build(img, sx, sy, sw, sh, k){
+        var w = Math.round(sw * k), h = Math.round(sh * k);
         var mk = function(){ var c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
         var grey = mk(), inv = mk();
         var gx = grey.getContext('2d', {willReadFrequently: true});
         gx.imageSmoothingEnabled = true; gx.imageSmoothingQuality = 'high';   // proper averaging when shrinking cuts moire
-        gx.drawImage(img, 0, 0, w, h);
+        gx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
         var d = gx.getImageData(0, 0, w, h), px = d.data, di = inv.getContext('2d').createImageData(w, h), q = di.data;
         for (var i = 0; i < px.length; i += 4){
           var y = .299 * px[i] + .587 * px[i + 1] + .114 * px[i + 2], v = Math.max(0, Math.min(255, (y - 128) * 1.4 + 128));
@@ -101,7 +106,8 @@
         // small masks for the digit finder
         var k2 = Math.min(1, 640 / Math.max(w, h)), mw = Math.round(w * k2), mh = Math.round(h * k2);
         var sc = document.createElement('canvas'); sc.width = mw; sc.height = mh;
-        var sx = sc.getContext('2d', {willReadFrequently: true}); sx.imageSmoothingQuality = 'high'; sx.drawImage(img, 0, 0, mw, mh);
+        var sx0 = sx, sy0 = sy;
+        var sx = sc.getContext('2d', {willReadFrequently: true}); sx.imageSmoothingQuality = 'high'; sx.drawImage(img, sx0, sy0, sw, sh, 0, 0, mw, mh);
         var sd = sx.getImageData(0, 0, mw, mh).data, ys = new Float32Array(mw * mh);
         for (var j = 0, n = 0; j < sd.length; j += 4, n++) ys[n] = .299 * sd[j] + .587 * sd[j + 1] + .114 * sd[j + 2];
         // "bright" is judged against the area around each pixel, not a fixed level: a TV photo is dimmer at
@@ -122,13 +128,71 @@
         // small colour copy, for telling the fighters apart by look
         var k3 = Math.min(1, 720 / Math.max(w, h)), cw = Math.round(w * k3), ch = Math.round(h * k3);
         var col = document.createElement('canvas'); col.width = cw; col.height = ch;
-        var cx2 = col.getContext('2d', {willReadFrequently: true}); cx2.imageSmoothingQuality = 'high'; cx2.drawImage(img, 0, 0, cw, ch);
-        URL.revokeObjectURL(url);
-        res({grey:grey, inv:inv, soft:soft, softInv:softInv, lum:lum, img:img, w:w, h:h, masks:[white, bright], mw:mw, mh:mh, k2:k2, color:col, k3:k3});
-      };
-      img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('That file is not a picture I can open.')); };
-      img.src = url;
-    });
+        var cx2 = col.getContext('2d', {willReadFrequently: true}); cx2.imageSmoothingQuality = 'high'; cx2.drawImage(img, sx0, sy0, sw, sh, 0, 0, cw, ch);
+        return {grey:grey, inv:inv, soft:soft, softInv:softInv, lum:lum, img:img, w:w, h:h, masks:[white, bright], mw:mw, mh:mh, k2:k2, color:col, k3:k3};
+  }
+
+  // ---------- our team's panels ----------
+  // Cooper and Nathan are always the two far-left panels, and always the same team colour (blue, red...).
+  // Find the far-left block of one strong team colour; that's the only part of the photo that gets read.
+  var TEAM = ['', 'red', 'blue', 'green', 'yellow'];
+  function teamOf(r, g, b){
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx < 70 || (mx - mn) / mx < .42) return 0;
+    var h = mx === mn ? 0 : mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+    h *= 60;
+    if (h < 16 || h > 338) return 1;
+    if (h >= 190 && h <= 248) return 2;
+    if (h >= 85 && h <= 160) return 3;
+    if (h >= 42 && h <= 66) return 4;
+    return 0;
+  }
+  function findTeamBlock(prep, nCols){
+    var C = prep.color, W = C.width, H = C.height, d = C.getContext('2d', {willReadFrequently: true}).getImageData(0, 0, W, H).data;
+    var cls = new Uint8Array(W * H), colN = [null, new Float32Array(W), new Float32Array(W), new Float32Array(W), new Float32Array(W)];
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++){
+      var i = y * W + x, c = teamOf(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]); cls[i] = c; if (c) colN[c][x]++;
+    }
+    // per colour: the leftmost wide run of columns where that colour is common
+    var cands = [];
+    for (var c = 1; c <= 4; c++){
+      var p = colN[c], mx = 0; for (x = 0; x < W; x++) mx = Math.max(mx, p[x]);
+      if (mx < H * .06) continue;
+      var thr = mx * .3, runs = [], cur = null, gapMax = W * .025, lastOn = -1e9;
+      for (x = 0; x < W; x++){
+        if (p[x] >= thr){ if (cur && x - lastOn <= gapMax) cur.R = x; else { cur = {L:x, R:x}; runs.push(cur); } lastOn = x; }
+      }
+      runs = runs.filter(function(r){ return r.R - r.L >= W * .06; });
+      if (!runs.length) continue;
+      var area = 0; for (x = runs[0].L; x <= runs[0].R; x++) area += p[x];
+      cands.push({c:c, L:runs[0].L, R:runs[0].R, area:area});
+    }
+    if (!cands.length) return null;
+    var big = Math.max.apply(null, cands.map(function(q){ return q.area; }));
+    cands = cands.filter(function(q){ return q.area >= big * .3; }).sort(function(a, b){ return a.L - b.L; });
+    var t = cands[0], L = t.L, R = t.R;
+    // its rows
+    var rowOn = function(yy){ var n = 0; for (var xx = L; xx <= R; xx++) if (cls[yy * W + xx] === t.c) n++; return n; };
+    var T = -1, B = -1;
+    for (y = 0; y < H; y++) if (rowOn(y) >= (R - L) * .15){ if (T < 0) T = y; B = y; }
+    if (T < 0 || B - T < H * .08) return null;
+    // one panel found where there should be two (a gap between them, or the second one partly hidden)
+    var aspect = (R - L) / (B - T), per = .55;
+    if (nCols === 2 && aspect < per * 1.45) R = Math.min(W - 1, L + (R - L) * 2);
+    if (nCols === 1 && aspect > per * 1.6) R = L + (R - L) / 2;
+    // tilt from the top edge of the colour block
+    var pts = [];
+    for (x = L; x <= R; x += Math.max(1, Math.round((R - L) / 40))){
+      for (y = Math.max(0, T - Math.round(H * .05)); y < Math.min(H, T + Math.round(H * .15)); y++) if (cls[y * W + x] === t.c){ pts.push([x, y]); break; }
+    }
+    var slope = 0;
+    if (pts.length > 5){
+      var mxp = 0, myp = 0; pts.forEach(function(q){ mxp += q[0]; myp += q[1]; }); mxp /= pts.length; myp /= pts.length;
+      var nu = 0, de = 0; pts.forEach(function(q){ nu += (q[0] - mxp) * (q[1] - myp); de += (q[0] - mxp) * (q[0] - mxp); });
+      slope = de ? Math.max(-.15, Math.min(.15, nu / de)) : 0;
+    }
+    var k = 1 / prep.k3;
+    return {team:TEAM[t.c], L:L * k, R:R * k, T:T * k, B:B * k, slope:slope};
   }
 
   // ---------- big-digit finder (placement numbers) ----------
@@ -393,7 +457,13 @@
       words.forEach(function(w){ var k = kindOf(w.t) || (LABEL_LEAD.test(w.t) ? kindOf(w.t.match(LABEL_LEAD)[1]) : null); if (k) kinds[k] = 1; });
       return Object.keys(kinds).length;
     };
-    return prepare(file).then(function(p){ prep = p; digits = findDigits(p); return ready(); })
+    var block = null, cropLayout = null, fullPrep = null, cb = progressCb;
+    // read one prepared image (our team's crop, or the whole photo)
+    var analyze = function(){
+      words = []; digits = [];
+      if (DBG){ DBG.passes = []; DBG.strips = []; DBG.headerPlace = null; DBG.fboxes = null; }
+      return Promise.resolve()
+      .then(function(){ digits = findDigits(prep); return ready(); })
       .then(function(w){ wk = w; return page(prep.grey, '11', 'Reading the screen (1 of 3)'); })
       .then(function(){ return page(prep.inv, '11', 'Reading the screen (2 of 3)'); })
       // still no KOs / Falls / SDs labels: try harder, one step at a time
@@ -403,7 +473,7 @@
       .then(function(){ return labelsFound() >= 2 ? null : page(inkImage(prep, true), '11', 'Trying harder (evening out glare)'); })
       .then(function(){ return labelsFound() >= 2 ? null : page(inkImage(prep, false), '11', 'Trying harder (evening out glare)'); })
       .then(function(){
-        if (labelsFound() >= 2) return null;
+        if (labelsFound() >= 2 || prep.crop) return null;
         // zoom: the middle of the photo at full resolution, for a TV that's small in the shot
         var im = prep.img, kx = im.naturalWidth / prep.w, x0 = prep.w * .12, y0 = prep.h * .12, cw = prep.w * .76, ch = prep.h * .76;
         var zf = Math.min(2.2, 2600 / cw); if (zf <= 1.15) return null;
@@ -460,7 +530,7 @@
         var ROW = {kos:0, falls:1, sds:2}, KLEN = {kos:3, falls:5, sds:3};
         // The player tags under each fighter's name (P1, P2, P3, P4) are the best anchors: they say exactly where
         // each player's column starts, and the line through them gives the tilt.
-        var nAll = dubs ? 4 : 2, layout = null, tags = {};
+        var nAll = prep.crop ? slots : dubs ? 4 : 2, layout = null, tags = {};
         words.forEach(function(w){
           var m = String(w.t).match(/^[pP]?[pP]([1-4lI|])[.,:]?$/);
           if (!m) return;
@@ -481,9 +551,15 @@
             ay += th / 2;
             var tsl = de ? Math.max(-.2, Math.min(.2, nu / de)) : 0;
             var x1 = mx0 + sp * (1 - mn);
-            layout = {x0:x1, spacing:sp, slope:tsl, tagH:th, tagY:ay + tsl * (x1 - ax), tags:tagNs};
+            layout = {x0:x1, spacing:sp, slope:tsl, tagH:th, tagY:ay + tsl * (x1 - ax), tags:tagNs, from:'tags'};
             slope = tsl;
           }
+        }
+        if (!layout && cropLayout){
+          layout = cropLayout;
+          // a single tag (P1) still pins down Cooper's column start and the name row
+          if (tags[1]){ layout = Object.assign({}, cropLayout, {x0:tags[1].x0, tagY:tags[1].y, tagH:tags[1].h, tags:[1], from:'colour+P1'}); }
+          slope = layout.slope;
         }
         var cols = [];
         // the tags only organise the stats when the labels sit inside the player columns (not one table to the left)
@@ -592,7 +668,7 @@
         };
         jobs = jobs.then(function(){ var inner = Promise.resolve();
         if (perPanel){
-          var gap = cols[1].x0 - cols[0].x0;
+          var gap = statsLayout ? statsLayout.spacing : cols[1].x0 - cols[0].x0;
           ['kos', 'falls', 'sds'].forEach(function(k){
             if (!cols.slice(0, slots).some(function(c){ return have(c, k); })) return;
             rows[k] = {vals:[null, null], layout:'panel'};
@@ -647,6 +723,7 @@
         // laurels around it, which the blob finder doesn't always see)
         if (!st.layout) return st;
         var L = st.layout, x0 = L.x0 + L.spacing * .45, x1 = L.x0 + L.spacing * 1.02, y0 = L.tagY - L.tagH * 3.5, y1 = L.tagY + L.tagH * 1.2;
+        if (L.top != null){ y0 = L.top - L.ph * .04; y1 = L.top + L.ph * .2; }
         x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(prep.w, x1); y1 = Math.min(prep.h, y1);
         if (x1 - x0 < 10 || y1 - y0 < 10) return st;
         var z = Math.max(1, Math.min(4, 140 / (y1 - y0)));
@@ -686,6 +763,41 @@
         });
       })
       .then(function(st){
+        // the fighter names: read each column's name row on its own, enlarged, letters only. Names are the
+        // surest way to tell fighters apart, and the full-screen pass can miss them under moire or glare.
+        if (!st.layout || !opts.fighters || !opts.fighters.length) return st;
+        var n = prep.crop ? slots : dubs ? 4 : 2, boxes = columnBoxes(prep, digits, st, n), chain = Promise.resolve();
+        if (DBG) DBG.nameBands = [];
+        boxes.forEach(function(b, i){
+          chain = chain.then(function(){
+            var x0 = Math.max(0, b.nx0), x1 = Math.min(prep.w, b.nx1), y0 = Math.max(0, b.ny0), y1 = Math.min(prep.h, b.ny1);
+            if (x1 - x0 < 20 || y1 - y0 < 10) return;
+            var z = Math.max(1, Math.min(3, 150 / (y1 - y0))), c = document.createElement('canvas');
+            c.width = Math.round((x1 - x0) * z); c.height = Math.round((y1 - y0) * z);
+            var cx = c.getContext('2d', {willReadFrequently: true});
+            cx.drawImage(prep.softInv, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+            // names are big: blur hard enough to melt any TV stripes, then stretch the contrast back
+            var id = cx.getImageData(0, 0, c.width, c.height), pd = id.data, lm = new Float32Array(c.width * c.height);
+            for (var q = 0; q < lm.length; q++) lm[q] = pd[q * 4];
+            boxBlur(lm, c.width, c.height, Math.max(1, Math.round(c.height / 45)));
+            var srt = Array.prototype.slice.call(lm).sort(function(a2, b2){ return a2 - b2; }), lo = srt[Math.floor(srt.length * .02)], hi = srt[Math.floor(srt.length * .98)], sc = hi - lo > 20 ? 255 / (hi - lo) : 1;
+            for (q = 0; q < lm.length; q++){ var vq = Math.max(0, Math.min(255, (lm[q] - lo) * sc)); pd[q * 4] = pd[q * 4 + 1] = pd[q * 4 + 2] = vq; }
+            cx.putImageData(id, 0, 0);
+            stepLabel = 'Reading the fighter names';
+            return wk.setParameters({tessedit_pageseg_mode: '6', tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.&-/ '})
+              .then(function(){ return wk.recognize(c); })
+              .then(function(r){
+                var map = function(xx, yy){ return [x0 + xx / z, y0 + yy / z]; }; map.k = z;
+                var ws = wordsOf(r, map).filter(function(w){ return /[A-Za-z]{2}/.test(w.t); });
+                ws.forEach(function(w){ w.band = i; });
+                if (DBG) DBG.nameBands.push({i:i, box:[x0, y0, x1, y1], read:ws.map(function(w){ return w.t; }).join(' ')});
+                words = words.concat(ws);
+              });
+          });
+        });
+        return chain.then(function(){ return st; });
+      })
+      .then(function(st){
         progressCb = null; stepLabel = '';
         var out = decide(st, digits, prep, {dubs:dubs, stocks:stocks, full:full, slots:slots}, words);
         var finish = function(){
@@ -693,13 +805,48 @@
             DBG.size = {w:prep.w, h:prep.h};
             DBG.words = words.map(function(w){ return {t:w.t, x:w.x, y:w.y, w:w.w, h:w.h, pass:w.pass}; });
             DBG.digits = digits.map(function(d){ return {ch:d.ch, x:d.x, y:d.y, h:d.h, d:d.d}; });
-            out.debug = DBG; DBG = null;
+            out.debug = DBG;
           }
           return out;
         };
         if (!opts.fighters || !opts.fighters.length) return finish();
-        return whoIsWho(prep, digits, st, words, dubs ? 4 : 2, opts.fighters, opts.prior, opts.learned).then(function(f){ out.fighters = f; return finish(); }, function(){ return finish(); });
-      }, function(e){ progressCb = null; stepLabel = ''; throw e; });
+        return whoIsWho(prep, digits, st, words, prep.crop ? slots : dubs ? 4 : 2, opts.fighters, opts.prior, opts.learned).then(function(f){ out.fighters = f; return finish(); }, function(){ return finish(); });
+      });
+    };
+    return loadImage(file).then(function(img){
+        var NW = img.naturalWidth, NH = img.naturalHeight, kf = Math.min(1, 2000 / Math.max(NW, NH));
+        var full = fullPrep = build(img, 0, 0, NW, NH, kf);
+        block = findTeamBlock(full, slots);
+        if (DBG){
+          var th = document.createElement('canvas'), tk = Math.min(1, 900 / Math.max(full.w, full.h)); th.width = Math.round(full.w * tk); th.height = Math.round(full.h * tk);
+          th.getContext('2d').drawImage(full.color, 0, 0, th.width, th.height);
+          DBG.full = {w:full.w, h:full.h, image:th.toDataURL('image/jpeg', .85)}; DBG.block = block;
+        }
+        if (!block){ prep = full; return; }
+        // crop just our team's panels, with a margin, from the original photo at full detail
+        var bw = block.R - block.L, bh = block.B - block.T;
+        var x0 = Math.max(0, block.L - bw * .05), x1 = Math.min(full.w, block.R + bw * .05);
+        var y0 = Math.max(0, block.T - bh * .12 - Math.abs(block.slope) * bw), y1 = Math.min(full.h, block.B + bh * .05 + Math.abs(block.slope) * bw);
+        var sx = x0 / kf, sy = y0 / kf, sw = (x1 - x0) / kf, sh = (y1 - y0) / kf;
+        var kc = Math.max(.25, Math.min(3, (slots === 2 ? 1500 : 800) / sw, 2000 / sh));
+        prep = build(img, sx, sy, sw, sh, kc);
+        prep.crop = {x0:x0, y0:y0, x1:x1, y1:y1, k:kc / kf};
+        // the columns, from the colour block, in crop coordinates (the player tags refine this if they're read)
+        var s2 = kc / kf, Lc = (block.L - x0) * s2, Tc = (block.T - y0) * s2, Hp = bh * s2;
+        cropLayout = {x0:Lc, spacing:bw * s2 / slots, slope:block.slope, tagH:Hp * .04, tagY:Tc + Hp * .14, tags:[], from:'colour', top:Tc, ph:Hp};
+        if (DBG) DBG.crop = {x0:x0, y0:y0, x1:x1, y1:y1, w:prep.w, h:prep.h, image:prep.color.toDataURL('image/jpeg', .9), k:s2, cropLayout:cropLayout};
+      })
+      .then(function(){ return analyze(); })
+      .then(function(out){
+        var got = [out.koMe, out.fallsMe, out.sdMe].some(function(v){ return v != null; });
+        if (got || !prep.crop) return out;
+        // nothing usable in our team's panels (maybe the colours were misjudged): read the whole photo instead
+        if (DBG){ DBG.fallback = true; DBG.crop = null; }
+        prep = fullPrep; cropLayout = null; progressCb = cb;
+        return analyze();
+      })
+      .then(function(out){ progressCb = null; stepLabel = ''; DBG = null; return out; },
+            function(e){ progressCb = null; stepLabel = ''; DBG = null; throw e; });
   }
 
   function decide(st, digits, prep, o, words){
@@ -713,7 +860,7 @@
     var place = st.place != null ? st.place : null;
     if (place === null && st.layout){
       // the big digit in Cooper's name row, to the right of his name
-      var L = st.layout, hx0 = L.x0 + L.spacing * .45, hx1 = L.x0 + L.spacing * 1.02, hy0 = L.tagY - L.tagH * 3.5, hy1 = L.tagY + L.tagH * 1.2;
+      var L = st.layout, hx0 = L.x0 + L.spacing * .45, hx1 = L.x0 + L.spacing * 1.02, hy0 = L.top != null ? L.top - L.ph * .04 : L.tagY - L.tagH * 3.5, hy1 = L.top != null ? L.top + L.ph * .2 : L.tagY + L.tagH * 1.2;
       var inHead = digits.filter(function(d){ return d.x > hx0 && d.x < hx1 && d.y > hy0 && d.y < hy1; });
       if (inHead.length) place = Math.min(2, inHead[0].ch);
     }
@@ -845,8 +992,14 @@
       var bot = ours.length ? Math.min.apply(null, ours.map(function(l){ return l.y - l.h * 2; })) : L.tagY + L.spacing * 1.1;
       return Array.apply(null, Array(n)).map(function(_, j){
         var x0 = L.x0 + j * L.spacing, ty = L.tagY + L.slope * j * L.spacing;
-        return {x0:x0 + L.spacing * .05, x1:x0 + L.spacing * .9, cx:x0 + L.spacing * .47, span:L.spacing, y0:ty + L.tagH * .9, y1:Math.max(ty + L.tagH * 3, bot + L.slope * j * L.spacing),
-          nx0:x0 - L.spacing * .04, nx1:x0 + L.spacing * .98, ny0:ty - L.tagH * 4, ny1:ty + L.tagH * .4};
+        var top = L.top != null ? L.top + L.slope * j * L.spacing : null;
+        // the name row: left part of the panel's header (the placement digit is on the right)
+        // names sit just above the P tag; without a tag, in the top part of the panel
+        var useTop = top != null && !(L.tags && L.tags.length);
+        var ny0 = useTop ? top - L.ph * .03 : ty - L.tagH * 3.6, ny1 = useTop ? top + L.ph * .2 : ty - L.tagH * .3;
+        var y0 = top != null ? Math.max(ty + L.tagH * .9, top + L.ph * .19) : ty + L.tagH * .9;
+        return {x0:x0 + L.spacing * .05, x1:x0 + L.spacing * .9, cx:x0 + L.spacing * .47, span:L.spacing, y0:y0, y1:Math.max(y0 + L.tagH * 3, bot + L.slope * j * L.spacing),
+          nx0:x0 - L.spacing * .04, nx1:x0 + L.spacing * .7, ny0:ny0, ny1:ny1};
       });
     }
     if (d.length === n && n > 1){ span = (d[n - 1].x - d[0].x) / (n - 1); centers = d.map(function(q){ return q.x + span * .2; }); }
