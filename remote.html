@@ -257,6 +257,11 @@
   .phsheet .falts { display:flex; gap:5px; flex-wrap:wrap; } .phsheet .falt { padding:0; background:none; border:none; opacity:.8; }
   .phsheet .nochip { width:34px; height:34px; border-radius:50%; background:rgba(23,20,15,.15); }
   :root[data-theme="dark"] .phsheet .fcard{background:#2a2b34 !important} :root[data-theme="dark"] .phsheet .fbadge.sess{background:#3c3d48;color:#fff}
+  .phsheet .ptools { display:flex; gap:8px; }
+  .phsheet .ptools button { flex:1; padding:10px; border-radius:10px; border:1px solid rgba(23,20,15,.14); background:var(--paper); font-size:11.5px; letter-spacing:.06em; }
+  .phsheet .ptools button.on { background:#ffd200; border-color:#ffd200; color:#18181f; }
+  :root[data-theme="dark"] .phsheet .ptools button:not(.on){background:#2a2b34 !important;color:#ececf1 !important;border-color:rgba(255,255,255,.14) !important}
+  .phsheet .pv { height:min(42vh,360px); }
   .phsheet .stats { display:flex; flex-direction:column; gap:6px; }
   .phsheet .srow { display:grid; grid-template-columns:46px 1fr 1fr; gap:6px; align-items:center; }
   .phsheet .stats.solo .srow { grid-template-columns:46px 1fr; }
@@ -781,6 +786,7 @@
     if (!file) return;
     if (S.photo && S.photo.url) try { URL.revokeObjectURL(S.photo.url); } catch(e){}
     var token = Date.now(), dubs = get('mode') === 'doubles', stocks = Number(get('stocks')) || 3;
+    S.photoFile = file;
     S.photo = {url:URL.createObjectURL(file), busy:true, pct:0, label:'Opening the photo', token:token, result:null, margin:null};
     S.pending = null; buzz(); drawSheet();
     var upd = function(patch){ if (S.photo && S.photo.token === token){ Object.assign(S.photo, patch); drawSheet(); } };
@@ -790,7 +796,7 @@
     var fighters = S.fighters.map(function(f){ var img = D.kv['img:' + f.id]; return {id:f.id, name:f.name, img: typeof img === 'string' && /^data:image\//.test(img) ? img : null}; });
     // how often each fighter turns up in each spot, for a gentle nudge when matching by look
     var prior = keys.map(function(k){ var c = {}; D.matches.forEach(function(m){ if (m.mode === mode && m[k]) c[m[k]] = (c[m[k]] || 0) + 1; }); return c; });
-    window.SmashPhoto.read(file, {mode:mode, stocks:stocks, fighters:fighters, prior:prior, learned: window.SmashPhoto.learnedLooks ? window.SmashPhoto.learnedLooks() : {},
+    window.SmashPhoto.read(file, {mode:mode, stocks:stocks, fighters:fighters, prior:prior, debug:true, learned: window.SmashPhoto.learnedLooks ? window.SmashPhoto.learnedLooks() : {},
       onProgress:function(pct, label){ upd({pct:pct, label:label}); }})
       .then(function(r){
         var full = fullStocks(get('mode'), stocks);
@@ -800,6 +806,8 @@
           picks: keys.map(function(k, i){ return (r.fighters && r.fighters[i] && r.fighters[i].id) || get(k) || null; }),
           pickHow: keys.map(function(k, i){ return r.fighters && r.fighters[i] && r.fighters[i].id ? r.fighters[i].how : 'session'; })});
         if (r.result) buzz([15, 30, 15]);
+        // the "how it read this" picture, drawn on this phone
+        if (window.SmashPhoto.drawDebug) window.SmashPhoto.drawDebug(r).then(function(u){ if (u) upd({debugImg:u}); }).catch(function(){});
       })
       .catch(function(e){ upd({busy:false, done:true, err:(e && e.message) || 'Could not read that photo.', read:null, result:null, margin:null}); });
   }
@@ -819,7 +827,9 @@
     var p = S.photo, dubs = get('mode') === 'doubles', stocks = Number(get('stocks')) || 3, full = fullStocks(get('mode'), stocks), r = p.read;
     var out = '<div class="scrim" data-act="photoClose"><div class="sheet phsheet" data-stop="1">' +
       '<div class="sub">PHOTO LOG \u00b7 '+(dubs ? '2V2' : '1V1')+' \u00b7 '+stocks+' STOCK</div>' +
-      '<div class="pv" style="background-image:url('+p.url+')"></div>';
+      '<div class="pv" style="background-image:url('+(p.showDebug && p.debugImg ? p.debugImg : p.url)+')'+(p.showDebug && p.debugImg ? ';height:min(78vh,1000px) !important' : '')+'"></div>' +
+      '<div class="ptools"><button class="blk'+(p.showDebug ? ' on' : '')+'" data-act="photoDebug">'+(p.showDebug ? '\u25c0 SHOW PHOTO' : '\ud83d\udd0d HOW IT READ IT')+'</button><button class="blk" data-act="photoSave">\u2913 SAVE PHOTO</button></div>' +
+      (p.read && p.read.version ? '<span class="note">Photo reader v' + esc(p.read.version) + '</span>' : '');
     if (p.busy) out += '<div class="st"><span>'+esc(p.label || 'Reading')+(p.pct ? ' \u00b7 '+p.pct+'%' : '')+'\u2026</span><div class="bar"><i style="width:'+Math.max(4, Math.min(100, p.pct || 0))+'%"></i></div></div>';
     if (p.err) out += '<div class="st err">'+esc(p.err)+'</div>';
     if (p.done){
@@ -1017,6 +1027,18 @@
     },
     cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
     photoClose: photoClose,
+    photoDebug: function(){
+      if (!S.photo) return;
+      if (!S.photo.debugImg){ toast(S.photo.busy ? 'STILL READING' : 'NO READ TO SHOW'); return; }
+      S.photo.showDebug = !S.photo.showDebug; buzz(10); drawSheet();
+    },
+    photoSave: function(){
+      var f = S.photoFile; if (!f) return;
+      // the share sheet where it's offered (iPhone: Save Image / Messages / AirDrop), a download otherwise
+      try { if (navigator.canShare && navigator.canShare({files:[f]})){ navigator.share({files:[f], title:'Smash results photo'}).catch(function(){}); return; } } catch(e){}
+      var a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name || 'smash-results.jpg';
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    },
     photoFighter: function(el){
       if (!S.photo) return;
       var i = Number(el.dataset.i), keys = photoKeys();

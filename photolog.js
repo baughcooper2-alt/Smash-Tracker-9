@@ -18,7 +18,8 @@
   var CDN = 'https://cdn.jsdelivr.net/npm/';
   var TESS = CDN + 'tesseract.js@5.1.1/dist/tesseract.min.js';
   var worker = null, loading = null, progressCb = null, stepLabel = '';
-  var DBG = null;   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
+  var DBG = null;
+  var VERSION = '6 (2026-11-24)';   // shown on the confirm sheet, so we know which reader a phone ran   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
 
   function loadScript(src){
     return new Promise(function(res, rej){
@@ -81,14 +82,37 @@
       img.src = url;
     });
   }
+  // Draw a region of an image at a new size. Shrinking a lot in one go skips pixels (on iPhone especially),
+  // which turns the TV's pixel grid into moire; halving step by step averages it out instead.
+  function scaled(img, sx, sy, sw, sh, w, h){
+    var cur = img, cx = sx, cy = sy, cw = sw, ch = sh, tmp = [];
+    while (cw / 2 >= w * 1.05 && ch / 2 >= h * 1.05){
+      var hw = Math.max(1, Math.round(cw / 2)), hh2 = Math.max(1, Math.round(ch / 2)), c = document.createElement('canvas');
+      c.width = hw; c.height = hh2;
+      var x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+      x.drawImage(cur, cx, cy, cw, ch, 0, 0, hw, hh2);
+      tmp.push(c); cur = c; cx = 0; cy = 0; cw = hw; ch = hh2;
+    }
+    var out = document.createElement('canvas'); out.width = w; out.height = h;
+    var ox = out.getContext('2d', {willReadFrequently: true}); ox.imageSmoothingEnabled = true; ox.imageSmoothingQuality = 'high';
+    ox.drawImage(cur, cx, cy, cw, ch, 0, 0, w, h);
+    tmp.forEach(function(c){ c.width = c.height = 0; });   // hand the memory back straight away (iPhone has a tight canvas budget)
+    return out;
+  }
+  function release(p){
+    if (!p) return;
+    ['grey', 'inv', 'soft', 'softInv', 'color'].forEach(function(k){ if (p[k] && p[k].width){ p[k].width = p[k].height = 0; } });
+    p.lum = null; p.masks = null;
+  }
   // Everything the reader works on, made from one region of the photo (sx, sy, sw, sh) scaled by k.
   function build(img, sx, sy, sw, sh, k){
         var w = Math.round(sw * k), h = Math.round(sh * k);
+        var src = scaled(img, sx, sy, sw, sh, w, h);
         var mk = function(){ var c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
         var grey = mk(), inv = mk();
         var gx = grey.getContext('2d', {willReadFrequently: true});
         gx.imageSmoothingEnabled = true; gx.imageSmoothingQuality = 'high';   // proper averaging when shrinking cuts moire
-        gx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+        gx.drawImage(src, 0, 0);
         var d = gx.getImageData(0, 0, w, h), px = d.data, di = inv.getContext('2d').createImageData(w, h), q = di.data;
         for (var i = 0; i < px.length; i += 4){
           var y = .299 * px[i] + .587 * px[i + 1] + .114 * px[i + 2], v = Math.max(0, Math.min(255, (y - 128) * 1.4 + 128));
@@ -106,8 +130,8 @@
         // small masks for the digit finder
         var k2 = Math.min(1, 640 / Math.max(w, h)), mw = Math.round(w * k2), mh = Math.round(h * k2);
         var sc = document.createElement('canvas'); sc.width = mw; sc.height = mh;
-        var sx0 = sx, sy0 = sy;
-        var sx = sc.getContext('2d', {willReadFrequently: true}); sx.imageSmoothingQuality = 'high'; sx.drawImage(img, sx0, sy0, sw, sh, 0, 0, mw, mh);
+        var small = scaled(src, 0, 0, w, h, mw, mh);
+        var sx = sc.getContext('2d', {willReadFrequently: true}); sx.drawImage(small, 0, 0); small.width = small.height = 0;
         var sd = sx.getImageData(0, 0, mw, mh).data, ys = new Float32Array(mw * mh);
         for (var j = 0, n = 0; j < sd.length; j += 4, n++) ys[n] = .299 * sd[j] + .587 * sd[j + 1] + .114 * sd[j + 2];
         // "bright" is judged against the area around each pixel, not a fixed level: a TV photo is dimmer at
@@ -128,7 +152,9 @@
         // small colour copy, for telling the fighters apart by look
         var k3 = Math.min(1, 720 / Math.max(w, h)), cw = Math.round(w * k3), ch = Math.round(h * k3);
         var col = document.createElement('canvas'); col.width = cw; col.height = ch;
-        var cx2 = col.getContext('2d', {willReadFrequently: true}); cx2.imageSmoothingQuality = 'high'; cx2.drawImage(img, sx0, sy0, sw, sh, 0, 0, cw, ch);
+        var sm2 = scaled(src, 0, 0, w, h, cw, ch);
+        var cx2 = col.getContext('2d', {willReadFrequently: true}); cx2.drawImage(sm2, 0, 0); sm2.width = sm2.height = 0;
+        src.width = src.height = 0;
         return {grey:grey, inv:inv, soft:soft, softInv:softInv, lum:lum, img:img, w:w, h:h, masks:[white, bright], mw:mw, mh:mh, k2:k2, color:col, k3:k3};
   }
 
@@ -457,7 +483,7 @@
       words.forEach(function(w){ var k = kindOf(w.t) || (LABEL_LEAD.test(w.t) ? kindOf(w.t.match(LABEL_LEAD)[1]) : null); if (k) kinds[k] = 1; });
       return Object.keys(kinds).length;
     };
-    var block = null, cropLayout = null, fullPrep = null, cb = progressCb;
+    var block = null, cropLayout = null, fullPrep = null, cb = progressCb, imgRef = null, fullK = 1;
     // read one prepared image (our team's crop, or the whole photo)
     var analyze = function(){
       words = []; digits = [];
@@ -470,8 +496,8 @@
       .then(function(){ return labelsFound() >= 2 ? null : page(prep.soft, '11', 'Trying harder (smoothing the TV pattern)'); })
       .then(function(){ return labelsFound() >= 2 ? null : page(prep.softInv, '11', 'Trying harder (smoothing the TV pattern)'); })
       .then(function(){ return labelsFound() >= 2 ? null : page(prep.grey, '6', 'Trying harder (as one block)'); })
-      .then(function(){ return labelsFound() >= 2 ? null : page(inkImage(prep, true), '11', 'Trying harder (evening out glare)'); })
-      .then(function(){ return labelsFound() >= 2 ? null : page(inkImage(prep, false), '11', 'Trying harder (evening out glare)'); })
+      .then(function(){ if (labelsFound() >= 2) return null; var c = inkImage(prep, true); return page(c, '11', 'Trying harder (evening out glare)').then(function(){ c.width = c.height = 0; }); })
+      .then(function(){ if (labelsFound() >= 2) return null; var c = inkImage(prep, false); return page(c, '11', 'Trying harder (evening out glare)').then(function(){ c.width = c.height = 0; }); })
       .then(function(){
         if (labelsFound() >= 2 || prep.crop) return null;
         // zoom: the middle of the photo at full resolution, for a TV that's small in the shot
@@ -815,14 +841,20 @@
     };
     return loadImage(file).then(function(img){
         var NW = img.naturalWidth, NH = img.naturalHeight, kf = Math.min(1, 2000 / Math.max(NW, NH));
-        var full = fullPrep = build(img, 0, 0, NW, NH, kf);
+        // to find our team only a small colour copy is needed; the full set of working images is built later,
+        // and only if the crop fails (keeps the iPhone's canvas memory low)
+        var fw = NW * kf, fh = NH * kf, k3 = Math.min(1, 720 / Math.max(fw, fh));
+        var full = {w:fw, h:fh, k3:k3, color:scaled(img, 0, 0, NW, NH, Math.round(fw * k3), Math.round(fh * k3))};
+        imgRef = img; fullK = kf;
         block = findTeamBlock(full, slots);
         if (DBG){
           var th = document.createElement('canvas'), tk = Math.min(1, 900 / Math.max(full.w, full.h)); th.width = Math.round(full.w * tk); th.height = Math.round(full.h * tk);
           th.getContext('2d').drawImage(full.color, 0, 0, th.width, th.height);
           DBG.full = {w:full.w, h:full.h, image:th.toDataURL('image/jpeg', .85)}; DBG.block = block;
+          th.width = th.height = 0;
         }
-        if (!block){ prep = full; return; }
+        full.color.width = full.color.height = 0;
+        if (!block){ prep = fullPrep = build(img, 0, 0, NW, NH, kf); return; }
         // crop just our team's panels, with a margin, from the original photo at full detail
         var bw = block.R - block.L, bh = block.B - block.T;
         var x0 = Math.max(0, block.L - bw * .05), x1 = Math.min(full.w, block.R + bw * .05);
@@ -842,11 +874,12 @@
         if (got || !prep.crop) return out;
         // nothing usable in our team's panels (maybe the colours were misjudged): read the whole photo instead
         if (DBG){ DBG.fallback = true; DBG.crop = null; }
-        prep = fullPrep; cropLayout = null; progressCb = cb;
+        release(prep);
+        prep = fullPrep = build(imgRef, 0, 0, imgRef.naturalWidth, imgRef.naturalHeight, fullK); cropLayout = null; progressCb = cb;
         return analyze();
       })
-      .then(function(out){ progressCb = null; stepLabel = ''; DBG = null; return out; },
-            function(e){ progressCb = null; stepLabel = ''; DBG = null; throw e; });
+      .then(function(out){ progressCb = null; stepLabel = ''; DBG = null; release(prep); release(fullPrep); out.version = VERSION; return out; },
+            function(e){ progressCb = null; stepLabel = ''; DBG = null; release(prep); release(fullPrep); throw e; });
   }
 
   function decide(st, digits, prep, o, words){
@@ -1119,5 +1152,60 @@
     try { localStorage.setItem(LOOKS_KEY, JSON.stringify(all)); } catch (e){}
   }
 
-  window.SmashPhoto = {read:read, ready:ready, learnedLooks:learnedLooks, remember:remember};
+  // The "how it read this" picture: the area that was read, with every box, row and number drawn on it.
+  // Takes a read() result made with {debug:true}; resolves to a JPEG data URL (or null).
+  function drawDebug(r){
+    var D = r && r.debug;
+    if (!D) return Promise.resolve(null);
+    var base = D.crop ? D.crop : D.full;
+    if (!base || !base.image) return Promise.resolve(null);
+    return new Promise(function(res){
+      var im = new Image();
+      im.onload = function(){
+        var k0 = im.width / base.w, up = Math.max(1, 900 / im.width), k = k0 * up;
+        var W = Math.round(im.width * up), H = Math.round(im.height * up), head = 150;
+        var c = document.createElement('canvas'); c.width = W; c.height = H + head;
+        var x = c.getContext('2d');
+        x.fillStyle = '#121218'; x.fillRect(0, 0, W, H + head);
+        x.drawImage(im, 0, head, W, H);
+        x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(0, head, W, H);
+        var P = function(px, py){ return [px * k, py * k + head]; };
+        var font = function(n){ x.font = '700 ' + n + 'px system-ui, sans-serif'; };
+        var label = function(t, px, py, col){ font(15); x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,.85)'; x.strokeText(t, px, py); x.fillStyle = col; x.fillText(t, px, py); };
+        var rect = function(a, b, col, w){ x.strokeStyle = col; x.lineWidth = w || 2; x.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); };
+        var COL = {kos:'#3caaff', falls:'#ff9628', sds:'#c86eff'};
+        var L = D.layout;
+        if (L) for (var i = 0; i < (D.crop ? 2 : 4); i++){
+          var cx = P(L.x0 + i * L.spacing, 0)[0];
+          x.strokeStyle = '#ffe600'; x.lineWidth = 3; x.beginPath(); x.moveTo(cx, head); x.lineTo(cx, H + head); x.stroke();
+          label(i === 0 ? 'COOPER' : i === 1 ? 'NATHAN' : 'P' + (i + 1), cx + 6, head + 20, '#ffe600');
+        }
+        (D.nameBands || []).forEach(function(nb){ var b = nb.box; rect(P(b[0], b[1]), P(b[2], b[3]), '#00e6ff', 2); label('name: "' + String(nb.read).slice(0, 22) + '"', P(b[0], b[3])[0] + 3, P(b[0], b[3])[1] + 16, '#00e6ff'); });
+        if (D.headerPlace){ var hb = D.headerPlace.box, rd = D.headerPlace.read; rect(P(hb[0], hb[1]), P(hb[2], hb[3]), '#ff3cc8', 2); label('placement: ' + (rd ? '"' + rd.ch + '"' : 'not read'), P(hb[0], hb[1])[0] + 3, P(hb[0], hb[3])[1] + 16, '#ff3cc8'); }
+        (D.labs || []).forEach(function(l){ rect(P(l.x0, l.y - l.h / 2 - 3), P(l.x1, l.y + l.h / 2 + 3), COL[l.kind], /filled|probe/.test(l.t) ? 1 : 3); });
+        (D.strips || []).forEach(function(st){
+          x.strokeStyle = COL[st.kind]; x.globalAlpha = .55; x.lineWidth = 1; x.beginPath();
+          var a = P(st.x0, st.y - st.hh), b = P(st.x1, st.y - st.hh + st.slope * (st.x1 - st.x0)), e = P(st.x1, st.y + st.hh + st.slope * (st.x1 - st.x0)), f = P(st.x0, st.y + st.hh);
+          x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.lineTo(e[0], e[1]); x.lineTo(f[0], f[1]); x.closePath(); x.stroke(); x.globalAlpha = 1;
+          st.read.forEach(function(q){ var pq = P(q.x, q.y); x.strokeStyle = '#00ff78'; x.lineWidth = 3; x.beginPath(); x.arc(pq[0], pq[1], 13, 0, 6.3); x.stroke(); label(st.kind.toUpperCase() + ' ' + q.t, pq[0] + 15, pq[1] + 5, '#00ff78'); });
+        });
+        // header: what it decided
+        var show = function(a, b){ return (a == null ? '?' : a) + ' / ' + (b == null ? '?' : b); };
+        font(22); x.fillStyle = '#ffd200';
+        x.fillText((r.result === 'W' ? 'WIN' : r.result === 'L' ? 'LOSS' : 'RESULT ?') + '  ·  stocks left ' + (r.margin == null ? '?' : r.margin), 14, 32);
+        font(17); x.fillStyle = '#ffffff';
+        x.fillText('KOs ' + show(r.koMe, r.koNathan) + '   Falls ' + show(r.fallsMe, r.fallsNathan) + '   SDs ' + show(r.sdMe, r.sdNathan), 14, 62);
+        font(14); x.fillStyle = 'rgba(255,255,255,.75)';
+        x.fillText((r.how ? 'How: ' + r.how : 'Couldn’t decide who won') + (D.block ? '  ·  ' + String(D.block.team).toUpperCase() + ' team block' : '  ·  no team block, whole photo') + (D.fallback ? ' (fell back)' : ''), 14, 90);
+        x.fillText('Columns from ' + (L ? L.from : 'labels') + '  ·  reader v' + VERSION, 14, 114);
+        font(13); x.fillStyle = 'rgba(255,255,255,.6)';
+        x.fillText('Boxes: blue KOs · orange Falls · purple SDs · green = number read · cyan = name · pink = placement', 14, 138);
+        res(c.toDataURL('image/jpeg', .85));
+      };
+      im.onerror = function(){ res(null); };
+      im.src = base.image;
+    });
+  }
+
+  window.SmashPhoto = {read:read, ready:ready, learnedLooks:learnedLooks, remember:remember, drawDebug:drawDebug, version:VERSION};
 })();
