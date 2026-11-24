@@ -19,7 +19,7 @@
   var TESS = CDN + 'tesseract.js@5.1.1/dist/tesseract.min.js';
   var worker = null, loading = null, progressCb = null, stepLabel = '';
   var DBG = null;
-  var VERSION = '7 (2026-11-24)';   // shown on the confirm sheet, so we know which reader a phone ran   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
+  var VERSION = '9 (2026-11-24)';   // shown on the confirm sheet, so we know which reader a phone ran   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
 
   function loadScript(src){
     return new Promise(function(res, rej){
@@ -334,7 +334,7 @@
   var LABELS = {
     kos:   /^K[O0o][’'`]?[s5S]?$/,
     falls: /^(?:[FfE][aA@4][l1Ii|!][l1Ii|!][s5S]?|[aA@][l1I|][l1I|][s5S])$/,
-    sds:   /^S[DO0][’'`]?[s5S]?$/
+    sds:   /^(?:S[DO0][’'`]?[s5S]?|(?:Self-?)?Destructs)$/
   };
   var LABEL_LEAD = /^(K[O0o][’'`]?[s5S]?|[FfE][aA@4][l1Ii|!][l1Ii|!][s5S]?|S[DO0][’'`]?[s5S]?)[:.]?(\d{1,2})$/;
   function kindOf(t){
@@ -410,6 +410,8 @@
       var bh = b.y1 - b.y0 + 1, bw = b.x1 - b.x0 + 1;
       if (bh < Lh * .45 || bh > Lh * 2.4 || bw > Lh * 1.8 || b.n < Lh * 2) return false;
       if (b.y0 <= 0 || b.y1 >= H - 1) return false;
+      // cut off by either end of the strip: a sliver of a panel border, not a number (numbers sit inside)
+      if (b.x0 <= 1 || b.x1 >= W - 2) return false;
       return Math.abs((b.y0 + b.y1) / 2 - H / 2) < Lh * 1.25;
     };
     keep.forEach(function(b){
@@ -420,8 +422,15 @@
     if (!any) return Promise.resolve([]);
     x.putImageData(d, 0, 0);
     // group the kept marks into numbers (digits close together), left to right
-    var marks = keep.filter(digitLike)
-      .sort(function(p, q){ return p.x0 - q.x0; });
+    var marks = keep.filter(digitLike);
+    // only one line of digits: the one closest to the middle of the strip (the rows above and below can
+    // reach into a tall strip when the rows sit close together)
+    if (marks.length > 1){
+      var cyOf = function(b){ return (b.y0 + b.y1) / 2; };
+      var mid = marks.reduce(function(best, b){ return Math.abs(cyOf(b) - H / 2) < Math.abs(cyOf(best) - H / 2) ? b : best; }, marks[0]);
+      marks = marks.filter(function(b){ return Math.abs(cyOf(b) - cyOf(mid)) < Math.max(b.y1 - b.y0, mid.y1 - mid.y0) * .5; });
+    }
+    marks.sort(function(p, q){ return p.x0 - q.x0; });
     var groups = [];
     marks.forEach(function(b){ var g = groups[groups.length - 1]; if (g && b.x0 - g.x1 < Lh * .45 && g.marks.length < 2){ g.marks.push(b); g.x1 = Math.max(g.x1, b.x1); g.y0 = Math.min(g.y0, b.y0); g.y1 = Math.max(g.y1, b.y1); } else groups.push({marks:[b], x0:b.x0, x1:b.x1, y0:b.y0, y1:b.y1}); });
     groups = want < 0 ? groups.slice(-1) : groups.slice(0, want || 4);
@@ -457,6 +466,93 @@
         marks:marks.length, read:out.map(function(o){ return {t:o.t, x:o.x, y:o.y}; })});
       return out;
     });
+  }
+
+  // ---------- the icon view ----------
+  // The results screen can also show KOs and Falls as a row of little character faces (with "x2" after a face
+  // hit twice) instead of a number. Count the faces: anything on the row that stands out from the row's own
+  // background colour, about a face in size. below = the faces sit on the line under the label.
+  function countIcons(prep, lab, xEnd, below, words, faceH){
+    var C = prep.color, k = prep.k3, CW = C.width, CH = C.height;
+    var FH = faceH || lab.h * 1.1;   // a face's height in the crop, from the row spacing when it's known
+    var yc = lab.y + (below ? FH * 1.25 : 0);
+    var x0 = Math.max(0, Math.round((lab.x1 + FH * .2) * k)), x1 = Math.min(CW, Math.round(xEnd * k));
+    var y0 = Math.max(0, Math.round((yc - FH * .72) * k)), y1 = Math.min(CH, Math.round((yc + FH * .72) * k));
+    var w = x1 - x0, h = y1 - y0;
+    if (w < 6 || h < 4) return null;
+    var d = C.getContext('2d', {willReadFrequently: true}).getImageData(x0, y0, w, h).data, n = w * h;
+    var rs = [], gs = [], bs = [];
+    for (var i = 0; i < n; i++){ rs.push(d[i * 4]); gs.push(d[i * 4 + 1]); bs.push(d[i * 4 + 2]); }
+    var med = function(a){ a.sort(function(p, q){ return p - q; }); return a[a.length >> 1]; };
+    var mr = med(rs), mg = med(gs), mb = med(bs), m = new Uint8Array(n);
+    // how far a pixel is from the row's own background; the cut-off follows the row's contrast (a dim or
+    // washed-out photo has fainter faces)
+    var dist = new Float32Array(n);
+    for (i = 0; i < n; i++) dist[i] = Math.abs(d[i * 4] - mr) + Math.abs(d[i * 4 + 1] - mg) + Math.abs(d[i * 4 + 2] - mb);
+    var ds = Array.prototype.slice.call(dist).sort(function(p, q){ return p - q; }), d95 = ds[Math.floor(n * .95)];
+    var cut = Math.max(45, Math.min(95, d95 * .42));
+    for (i = 0; i < n; i++) m[i] = dist[i] > cut ? 1 : 0;
+    // the bright lines between rows run all the way across: wipe any pixel row that's mostly "on"
+    for (var yy = 0; yy < h; yy++){
+      var on = 0; for (var xx = 0; xx < w; xx++) on += m[yy * w + xx];
+      if (on > w * .55) for (xx = 0; xx < w; xx++) m[yy * w + xx] = 0;
+    }
+    // thin lines (the row separators, slanted on a tilted photo) are a short run of pixels top to bottom;
+    // faces are thick. Wipe short vertical runs so lines don't glue onto the faces
+    var minRun = Math.max(2, Math.round(FH * k * .2));
+    for (var xx2 = 0; xx2 < w; xx2++){
+      var runStart = -1;
+      for (var yy2 = 0; yy2 <= h; yy2++){
+        var on2 = yy2 < h && m[yy2 * w + xx2];
+        if (on2 && runStart < 0) runStart = yy2;
+        if (!on2 && runStart >= 0){ if (yy2 - runStart < minRun) for (var z2 = runStart; z2 < yy2; z2++) m[z2 * w + xx2] = 0; runStart = -1; }
+      }
+    }
+    var seen = new Int32Array(n), parts = [], stack = [];
+    for (var s0 = 0; s0 < n; s0++){
+      if (!m[s0] || seen[s0]) continue;
+      var b = {x0:w, x1:0, y0:h, y1:0, n:0}; seen[s0] = 1; stack.push(s0);
+      while (stack.length){
+        var q = stack.pop(), qx = q % w, qy = (q - qx) / w;
+        b.n++; if (qx < b.x0) b.x0 = qx; if (qx > b.x1) b.x1 = qx; if (qy < b.y0) b.y0 = qy; if (qy > b.y1) b.y1 = qy;
+        [q - 1, q + 1, q - w, q + w].forEach(function(nq){ if (nq >= 0 && nq < n && m[nq] && !seen[nq] && Math.abs((nq % w) - qx) <= 1){ seen[nq] = 1; stack.push(nq); } });
+      }
+      if (b.n >= 6) parts.push(b);
+    }
+    var L = FH * k;
+    parts = parts.filter(function(b){ return b.y1 - b.y0 + 1 >= L * .25; }).sort(function(p, q){ return p.x0 - q.x0; });
+    // a face often comes apart into a few pieces: join pieces that overlap or nearly touch
+    var icons = [];
+    parts.forEach(function(b){
+      var last = icons[icons.length - 1];
+      if (last && b.x0 <= last.x1 + L * .12){ last.x1 = Math.max(last.x1, b.x1); last.y0 = Math.min(last.y0, b.y0); last.y1 = Math.max(last.y1, b.y1); }
+      else icons.push({x0:b.x0, x1:b.x1, y0:b.y0, y1:b.y1});
+    });
+    // a face: about face-sized, and centred on this row (not the top or bottom of a face on the next row)
+    icons = icons.filter(function(c){
+      var iw = c.x1 - c.x0 + 1, ih = c.y1 - c.y0 + 1;
+      return ih >= L * .55 && iw >= L * .5 && iw <= L * 2.4 && Math.abs((c.y0 + c.y1) / 2 - h / 2) < L * .35;
+    });
+    // faces are listed left to right from just after the label: keep the unbroken run from the left and stop
+    // at the first big gap (anything further along is the panel's edge or the next panel), and ignore pieces
+    // cut off by the end of the strip
+    icons = icons.filter(function(c){ return c.x1 < w - 2; });
+    var run = [];
+    for (var ii = 0; ii < icons.length; ii++){
+      var gapX = ii ? icons[ii].x0 - icons[ii - 1].x1 : icons[ii].x0;
+      if (gapX > L * (ii ? 1.6 : 3.5)) break;
+      run.push(icons[ii]);
+    }
+    icons = run;
+    // a wide piece can be two faces side by side
+    var count = 0;
+    icons.forEach(function(c){ var iw = c.x1 - c.x0 + 1; count += iw > L * 1.6 ? 2 : 1; c.cx = (x0 + (c.x0 + c.x1) / 2) / k; });
+    // "x2" after a face: that face counts that many times
+    var mult = (words || []).filter(function(wd){
+      return /^[x×X]\s?[1-9]$/.test(wd.t) && Math.abs(wd.y - yc) < lab.h * .8 && wd.x > lab.x1 && wd.x < xEnd;
+    });
+    mult.forEach(function(wd){ var v = +wd.t.replace(/\D/g, ''); if (v > 1) count += v - 1; });
+    return {n:count, icons:icons.map(function(c){ return {x:c.cx, y:yc}; }), y:yc};
   }
 
   // ---------- the reader ----------
@@ -649,6 +745,16 @@
             }
           });
           if (pairs.length && !statsLayout){ pairs.sort(function(a, b){ return a - b; }); slope = Math.max(-.25, Math.min(.25, pairs[Math.floor(pairs.length / 2)])); }
+          // on a photo taken at an angle the panels' top edge leans more than the stats rows lower down, so
+          // when the same row's label was really read in both Cooper's and Nathan's panels, use that lean
+          if (statsLayout && cols.length >= 2){
+            var local = [];
+            ['kos', 'falls', 'sds'].forEach(function(k){
+              var a = have(cols[0], k), b = have(cols[1], k);
+              if (a && b && a.t !== '(filled)' && b.t !== '(filled)' && b.x0 - a.x0 > a.h * 3) local.push((b.y - a.y) / (b.x0 - a.x0));
+            });
+            if (local.length){ local.sort(function(a, b){ return a - b; }); slope = Math.max(-.25, Math.min(.25, local[local.length >> 1])); if (DBG) DBG.rowSlope = slope; }
+          }
         }
 
         // Probe for columns the OCR missed on the left. Glare or a dark corner can hide Cooper's labels
@@ -702,8 +808,31 @@
               var lab = cols[i] && have(cols[i], k);
               if (colX[i] == null) colX[i] = cols[i].x0 + gap * .3;
               if (!lab) return;
+              // the icon view: this panel shows Damage / Self-Destructs rows, and KOs / Falls as faces
+              var cx0 = cols[i].x0 - gap * .05, cx1 = cols[i].x0 + gap;
+              var iconView = words.some(function(w){ return w.x > cx0 && w.x < cx1 && /damage|destructs|given|taken/i.test(w.t); });
+              if (iconView && (k === 'kos' || k === 'falls')){
+                var endX = Math.min(prep.w - 1, cols[i].x0 + gap * .97);
+                // faces on the label's line; or on the line below when the rows leave room for one
+                var other = have(cols[i], k === 'kos' ? 'falls' : 'kos'), rowGap = other ? Math.abs(other.y - lab.y) : null;
+                // faces fill most of a row (their size comes from the row spacing when both rows were found).
+                // Look on the label's own line first; only if that's empty, on the line below (the other
+                // version of this page puts the faces under the label, at about half the row spacing)
+                var same = countIcons(prep, lab, endX, false, words, rowGap ? rowGap * .6 : lab.h * 1.1);
+                var res = same;
+                if ((!same || !same.n) && rowGap) res = countIcons(prep, lab, endX, true, words, rowGap * .3) || same;
+                if (res){
+                  rows[k].vals[i] = res.n;
+                  if (DBG) DBG.strips.push({kind:k, label:lab.t + ' (faces)', x0:lab.x1, x1:endX, y:res.y, hh:lab.h * .75, slope:0, src:'icons', blur:0, marks:res.n, read:res.icons.map(function(c){ return {t:'face', x:c.x, y:c.y}; })});
+                }
+                return;
+              }
               // the number right after the label, inside this player's column
-              var until = Math.min(cols[i + 1] ? cols[i + 1].x0 - lab.h * .6 : Infinity, lab.x0 + gap * .84);
+              // up to just before the next panel: on the results screen the numbers sit at the far right
+              var nextX = cols[i + 1] ? cols[i + 1].x0 : (statsLayout ? statsLayout.x0 + (i + 1) * gap : lab.x0 + gap);
+              // Nathan's panel is the last one read: let his strip run a little past the estimated edge
+              var last = i === Math.min(slots, cols.length) - 1;
+              var until = last ? Math.min(prep.w - 1, nextX + gap * .07) : Math.min(nextX - lab.h * .25, lab.x0 + gap * 1.02);
               inner = inner.then(function(){
                 if (lab.lead !== null){ rows[k].vals[i] = lab.lead; return; }
                 return stripRead(wk, prep, lab, until - lab.x1, slope, -1).then(function(ns){
@@ -771,10 +900,15 @@
           var C = prep.color, k3 = prep.k3, cx0 = Math.round(x0 * k3), cy0 = Math.round(y0 * k3), cw = Math.round((x1 - x0) * k3), chh = Math.round((y1 - y0) * k3);
           if (cw < 8 || chh < 8) return null;
           var dd = C.getContext('2d', {willReadFrequently: true}).getImageData(cx0, cy0, cw, chh).data, m = new Uint8Array(cw * chh);
+          // gold and white are judged against this box's own brightness (a dim photo has a darker gold)
+          var lums = [];
+          for (var q0 = 0; q0 < m.length; q0++) lums.push(.299 * dd[q0 * 4] + .587 * dd[q0 * 4 + 1] + .114 * dd[q0 * 4 + 2]);
+          var srtL = lums.slice().sort(function(a, b){ return a - b; }), p97 = srtL[Math.floor(srtL.length * .97)], p50 = srtL[srtL.length >> 1];
+          var bright = Math.max(p50 + 35, p97 * .62);
           for (var q = 0; q < m.length; q++){
-            var rr = dd[q * 4], gg = dd[q * 4 + 1], bb = dd[q * 4 + 2], lum = .299 * rr + .587 * gg + .114 * bb, chroma = Math.max(rr, gg, bb) - Math.min(rr, gg, bb);
-            var gold = rr > 140 && gg > 120 && bb < gg * .7 && rr - bb > 70;
-            var white = lum > 185 && chroma < 60;
+            var rr = dd[q * 4], gg = dd[q * 4 + 1], bb = dd[q * 4 + 2], lum = lums[q], mx = Math.max(rr, gg, bb), chroma = mx - Math.min(rr, gg, bb);
+            var gold = lum > bright * .85 && rr >= bb + 45 && gg >= bb + 35 && Math.abs(rr - gg) < 80;
+            var white = lum > bright && chroma < 60;
             m[q] = gold || white ? 1 : 0;
           }
           var blobs = blobsOf({mw:cw, mh:chh, k2:1}, m, true).filter(function(b){ return b.h >= L.tagH * k3 * 1.1 && (b.ch === 1 || b.ch === 2); });
@@ -950,12 +1084,15 @@
   // A fighter's name read in a column is a sure match. Otherwise the colours of the character art in that
   // column are compared with every fighter's portrait and the closest is a best guess (with runners-up).
   var NORM = function(t){ return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  // letters OCR mixes up in the game's heavy italic font cost less than other swaps ("CLOUP" for CLOUD)
+  var LOOKALIKE = ['DP', 'DO', 'OQ', 'CG', 'CS', 'CO', 'UV', 'IL', 'IJ', 'I1', 'L1', 'EF', 'RK', 'MN', 'B8', 'S5', 'O0', 'Z2', 'HN', 'TY'];
+  function subCost(x, y){ return x === y ? 0 : (LOOKALIKE.indexOf(x + y) >= 0 || LOOKALIKE.indexOf(y + x) >= 0) ? .35 : 1; }
   function lev(a, b){
     var prev = [], cur = [], i, j;
     for (j = 0; j <= b.length; j++) prev[j] = j;
     for (i = 1; i <= a.length; i++){
       cur = [i];
-      for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + subCost(a[i - 1], b[j - 1]));
       prev = cur;
     }
     return prev[b.length];
@@ -1077,7 +1214,7 @@
       // name text has one height; a "word" far taller than the rest is a piece of the art read as letters
       if (ws.length >= 2){
         var hs2 = ws.map(function(w){ return w.h; }).sort(function(a2, b2){ return a2 - b2; }), mh = hs2[hs2.length >> 1];
-        ws = ws.filter(function(w){ return w.h <= mh * 2; });
+        ws = ws.filter(function(w){ return w.h <= mh * 2 || NORM(w.t).length >= 4; });   // short scraps only: big names stay
       }
       // group into lines (words a little higher or lower still share a line), then read each line left to right
       var lines = [];
@@ -1107,6 +1244,11 @@
             var sc = similar(phrase, f.key), need = f.key.length >= 8 ? .75 : .82;
             // the start of a name, cut off by the art or the edge ("BOWS" for Bowser)
             if (phrase.length >= 4 && f.key.indexOf(phrase) === 0 && phrase.length < f.key.length) sc = Math.max(sc, .78 + .2 * phrase.length / f.key.length);
+            // or its end, when the front is lost under the art or the logo ("VNETTA" for Bayonetta)
+            if (phrase.length >= 5 && phrase.length < f.key.length){
+              var tail = f.key.slice(-phrase.length), ts = similar(phrase, tail);
+              if (ts >= .8) sc = Math.max(sc, (.8 + .2 * phrase.length / f.key.length) * (ts >= .9 ? 1 : .95));
+            }
             // one whole word of a longer name ("FALCON" for Captain Falcon) counts, a little less
             if (f.parts.length > 1) f.parts.forEach(function(w){ var ws2 = similar(phrase, w) * .95; if (ws2 >= .8 && ws2 > sc){ sc = ws2; need = .8; } });
             // the more of the written name a match explains, the better ("ZERO SUIT SAMUS" beats "SAMUS")
