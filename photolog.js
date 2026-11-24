@@ -19,7 +19,7 @@
   var TESS = CDN + 'tesseract.js@5.1.1/dist/tesseract.min.js';
   var worker = null, loading = null, progressCb = null, stepLabel = '';
   var DBG = null;
-  var VERSION = '6 (2026-11-24)';   // shown on the confirm sheet, so we know which reader a phone ran   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
+  var VERSION = '7 (2026-11-24)';   // shown on the confirm sheet, so we know which reader a phone ran   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
 
   function loadScript(src){
     return new Promise(function(res, rej){
@@ -907,7 +907,10 @@
     }
 
     // what the Falls row says (Falls counts every stock lost, SDs included)
-    var teamFalls = o.dubs ? (fMe !== null && fN !== null ? fMe + fN : null) : fMe;
+    // stocks lost = Falls + SDs: on the results screen a self-destruct is NOT counted in Falls (the other
+    // side's KOs add up to your Falls alone). An unread SDs row counts as 0.
+    var lostOf = function(f, sd){ return f === null ? null : f + (sd || 0); };
+    var teamFalls = o.dubs ? (fMe !== null && fN !== null ? lostOf(fMe, sdMe) + lostOf(fN, sdN) : null) : lostOf(fMe, sdMe);
     var byStats = teamFalls === null ? null : teamFalls >= o.full ? 'L' : 'W';
     var result = null, confidence = 'none', how = '';
     if (place !== null){
@@ -917,12 +920,12 @@
       if (confidence === 'low') how += ', but the Falls row disagrees';
     } else if (byStats){
       result = byStats; confidence = 'stats';
-      how = byStats === 'L' ? 'your team fell ' + teamFalls + ' of ' + o.full + ' times' : 'your team still had stocks left';
+      how = byStats === 'L' ? 'your team lost ' + teamFalls + ' of ' + o.full + ' stocks' : 'your team still had stocks left';
     }
 
     // stocks left for the side that won
     var margin = null, marginHow = '';
-    if (result === 'W' && teamFalls !== null){ margin = Math.max(0, o.full - teamFalls); marginHow = 'your stocks minus your falls'; }
+    if (result === 'W' && teamFalls !== null){ margin = Math.max(0, o.full - teamFalls); marginHow = 'your stocks minus your falls and SDs'; }
     if (result === 'L'){
       var teamKos = o.dubs ? (koMe !== null && koN !== null ? koMe + koN : null) : koMe;
       if (teamKos !== null){ margin = Math.max(1, Math.min(o.full, o.full - teamKos)); marginHow = 'their stocks minus your KOs (estimate)'; }
@@ -1067,12 +1070,35 @@
         // with the player tags known, names sit in the band just above the tag
         if (b.nx0 != null) return w.x > b.nx0 && w.x < b.nx1 && w.y > b.ny0 && w.y < b.ny1;
         return w.x > b.x0 && w.x < b.x1;
-      }).sort(function(p, q){ return p.y - q.y || p.x - q.x; });
+      }).filter(function(w, i2, all){
+        // the same word found by two reading passes counts once
+        return !all.some(function(o, j2){ return j2 < i2 && o.t === w.t && Math.abs(o.x - w.x) < w.h * .4 && Math.abs(o.y - w.y) < w.h * .4; });
+      }).sort(function(p, q){ return p.y - q.y; });
+      // name text has one height; a "word" far taller than the rest is a piece of the art read as letters
+      if (ws.length >= 2){
+        var hs2 = ws.map(function(w){ return w.h; }).sort(function(a2, b2){ return a2 - b2; }), mh = hs2[hs2.length >> 1];
+        ws = ws.filter(function(w){ return w.h <= mh * 2; });
+      }
+      // group into lines (words a little higher or lower still share a line), then read each line left to right
+      var lines = [];
+      ws.forEach(function(w){
+        var ln = lines.filter(function(l){ return Math.abs(l.y - w.y) <= Math.max(l.h, w.h) * .55; })[0];
+        if (ln){ ln.ws.push(w); ln.y = (ln.y * (ln.ws.length - 1) + w.y) / ln.ws.length; ln.h = Math.max(ln.h, w.h); } else lines.push({y:w.y, h:w.h, ws:[w]});
+      });
+      lines.sort(function(p, q){ return p.y - q.y; });
+      ws = [];
+      lines.forEach(function(l){ l.ws.sort(function(p, q){ return p.x - q.x; }); l.ws.forEach(function(w){ w.line = l; ws.push(w); }); });
       var best = null;
       for (var i = 0; i < ws.length; i++){
         var phrase = '';
         for (var j = i; j < Math.min(ws.length, i + 4); j++){
-          if (j > i && (Math.abs(ws[j].y - ws[i].y) > ws[i].h * .7)) break;
+          if (j > i){
+            // same line, or a name wrapped onto the line just below ("ZERO SUIT" / "SAMUS")
+            var pv = ws[j - 1], dy = ws[j].y - pv.y, hh3 = Math.max(pv.h, ws[j].h);
+            var sameLine = ws[j].line === pv.line;
+            var nextLine = !sameLine && dy > 0 && dy <= hh3 * 2.4 && ws[j].x0 > ws[i].x0 - hh3 * 2 && ws[j].x0 < pv.x1 + hh3;
+            if (!sameLine && !nextLine) break;
+          }
           phrase += NORM(ws[j].t);
           if (phrase.length < 3) continue;
           var hits = [];
@@ -1083,11 +1109,12 @@
             if (phrase.length >= 4 && f.key.indexOf(phrase) === 0 && phrase.length < f.key.length) sc = Math.max(sc, .78 + .2 * phrase.length / f.key.length);
             // one whole word of a longer name ("FALCON" for Captain Falcon) counts, a little less
             if (f.parts.length > 1) f.parts.forEach(function(w){ var ws2 = similar(phrase, w) * .95; if (ws2 >= .8 && ws2 > sc){ sc = ws2; need = .8; } });
-            if (sc >= need) hits.push({id:f.id, sc:sc});
+            // the more of the written name a match explains, the better ("ZERO SUIT SAMUS" beats "SAMUS")
+            if (sc >= need) hits.push({id:f.id, sc:sc, adj:sc + .02 * phrase.length});
           });
-          hits.sort(function(p2, q2){ return q2.sc - p2.sc; });
+          hits.sort(function(p2, q2){ return q2.adj - p2.adj; });
           // a word that fits two fighters equally ("KONG") settles nothing
-          if (hits.length && !(hits[1] && hits[1].sc >= hits[0].sc - .01) && (!best || hits[0].sc > best.sc)) best = hits[0];
+          if (hits.length && !(hits[1] && hits[1].adj >= hits[0].adj - .01) && (!best || hits[0].adj > best.adj)) best = hits[0];
         }
       }
       return best;
@@ -1133,9 +1160,10 @@
         // the column's colour signature, so the page can remember it once the fighter is confirmed
         var sig = cols[i] ? Array.prototype.map.call(cols[i], function(v){ return Math.round(v * 1000) / 1000; }) : null;
         if (DBG){ (DBG.fboxes = DBG.fboxes || [])[i] = {box:b, byName:byName[i] || null, top:ranked.slice(0, 5).map(function(r){ return {id:r.id, sc:Math.round(r.sc * 1000) / 1000}; })}; }
-        if (byName[i]) return {id:byName[i].id, how:'name', sig:sig, alts:[byName[i].id].concat(alts.filter(function(a){ return a !== byName[i].id; })).slice(0, 4)};
+        var nameOfId = function(id){ var f = fighters.filter(function(q){ return q.id === id; })[0]; return f ? f.name : ''; };
+        if (byName[i]) return {id:byName[i].id, name:nameOfId(byName[i].id), how:'name', sig:sig, alts:[byName[i].id].concat(alts.filter(function(a){ return a !== byName[i].id; })).slice(0, 4)};
         if (!ranked.length) return {id:null, how:'none', sig:sig, alts:[]};
-        return {id:ranked[0].id, how:'look', sig:sig, alts:alts};
+        return {id:ranked[0].id, name:nameOfId(ranked[0].id), how:'look', sig:sig, alts:alts};
       });
     });
   }
@@ -1163,7 +1191,7 @@
       var im = new Image();
       im.onload = function(){
         var k0 = im.width / base.w, up = Math.max(1, 900 / im.width), k = k0 * up;
-        var W = Math.round(im.width * up), H = Math.round(im.height * up), head = 150;
+        var W = Math.round(im.width * up), H = Math.round(im.height * up), head = 176;
         var c = document.createElement('canvas'); c.width = W; c.height = H + head;
         var x = c.getContext('2d');
         x.fillStyle = '#121218'; x.fillRect(0, 0, W, H + head);
@@ -1198,8 +1226,10 @@
         font(14); x.fillStyle = 'rgba(255,255,255,.75)';
         x.fillText((r.how ? 'How: ' + r.how : 'Couldn’t decide who won') + (D.block ? '  ·  ' + String(D.block.team).toUpperCase() + ' team block' : '  ·  no team block, whole photo') + (D.fallback ? ' (fell back)' : ''), 14, 90);
         x.fillText('Columns from ' + (L ? L.from : 'labels') + '  ·  reader v' + VERSION, 14, 114);
+        var fl = (r.fighters || []).slice(0, 2).map(function(f, i){ return (i ? 'Nathan: ' : 'Cooper: ') + (f && f.name ? f.name + (f.how === 'name' ? ' (read)' : ' (guess)') : '?'); });
+        font(16); x.fillStyle = '#a0ffa0'; x.fillText(fl.length ? fl.join('   ') : 'Fighters: not checked', 14, 140);
         font(13); x.fillStyle = 'rgba(255,255,255,.6)';
-        x.fillText('Boxes: blue KOs · orange Falls · purple SDs · green = number read · cyan = name · pink = placement', 14, 138);
+        x.fillText('Boxes: blue KOs · orange Falls · purple SDs · green = number read · cyan = name · pink = placement', 14, 164);
         res(c.toDataURL('image/jpeg', .85));
       };
       im.onerror = function(){ res(null); };

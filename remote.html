@@ -817,7 +817,9 @@
     var dubs = get('mode') === 'doubles', full = fullStocks(get('mode'), Number(get('stocks')) || 3);
     if (p.marginTouched) return p.margin;
     var sum = function(a, b){ return dubs ? (a == null || b == null ? null : a + b) : (a == null ? null : a); };
-    if (p.result === 'W'){ var f = sum(p.fallsMe, p.fallsNathan); if (f !== null) return Math.max(0, Math.min(full, full - f)); }
+    // stocks lost = Falls + SDs (a self-destruct isn't counted in Falls on the results screen)
+    var lost = function(f, sd){ return f == null ? null : f + (sd || 0); };
+    if (p.result === 'W'){ var f = sum(lost(p.fallsMe, p.sdMe), lost(p.fallsNathan, p.sdNathan)); if (f !== null) return Math.max(0, Math.min(full, full - f)); }
     if (p.result === 'L'){ var k = sum(p.koMe, p.koNathan); if (k !== null) return Math.max(1, Math.min(full, full - k)); }
     return p.margin == null ? null : p.margin;
   }
