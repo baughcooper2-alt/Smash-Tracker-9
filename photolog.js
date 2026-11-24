@@ -18,6 +18,7 @@
   var CDN = 'https://cdn.jsdelivr.net/npm/';
   var TESS = CDN + 'tesseract.js@5.1.1/dist/tesseract.min.js';
   var worker = null, loading = null, progressCb = null, stepLabel = '';
+  var DBG = null;   // read(file, {debug:true}) fills this with everything it saw, for the diagram view
 
   function loadScript(src){
     return new Promise(function(res, rej){
@@ -178,7 +179,7 @@
   function classify(get, x0, y0, bw, bh, textH){
     if (!templates10) templates10 = fontTemplates(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], []);
     // a plain upright bar is a 1 (no font template is that bare)
-    if (bw / bh < .36 && (!textH || (bh > textH * .6 && bh < textH * 1.25))){ var on = 0; for (var yy = y0; yy < y0 + bh; yy++) for (var xx = x0; xx < x0 + bw; xx++) on += get(xx, yy); if (on / (bw * bh) > .55) return 1; }
+    if (bw / bh < .36 && (!textH || (bh > textH * .6 && bh < textH * 2.4))){ var on = 0; for (var yy = y0; yy < y0 + bh; yy++) for (var xx = x0; xx < x0 + bw; xx++) on += get(xx, yy); if (on / (bw * bh) > .55) return 1; }
     var g = gridOf(get, x0, y0, bw, bh), ar = bw / bh, best = null;
     templates10.forEach(function(t){
       var dist = 0; for (var i = 0; i < g.length; i++) dist += (g[i] - t.g[i]) * (g[i] - t.g[i]);
@@ -187,7 +188,7 @@
     });
     return best && best.d < .12 ? best.ch : null;
   }
-  function blobsOf(p, m){
+  function blobsOf(p, m, crop){
     var W = p.mw, H = p.mh, seen = new Int32Array(W * H), blobs = [], stack = [];
     for (var s0 = 0; s0 < m.length; s0++){
       if (!m[s0] || seen[s0]) continue;
@@ -206,7 +207,9 @@
     var T = makeTemplates(), k = 1 / p.k2;
     return blobs.map(function(b){
       var bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1, fill = b.n / (bw * bh);
-      if (bh < H * .06 || bh > H * .55 || bw > W * .22 || bh / bw < .9 || bh / bw > 6 || fill < .12 || fill > .85) return null;
+      // whole photo: a digit is a small part of it; a crop around one digit: it fills much of the crop
+      if (crop ? (bh < H * .15 || bh > H * .95 || bw > W * .8) : (bh < H * .06 || bh > H * .55 || bw > W * .22)) return null;
+      if (bh / bw < .9 || bh / bw > 6 || fill < .12 || fill > .85) return null;
       var get = function(xx, yy){ return seen[yy * W + xx] === b.id ? 1 : 0; };
       var g = gridOf(get, b.x0, b.y0, bw, bh), ar = bw / bh, best = null;
       T.forEach(function(t){
@@ -272,7 +275,9 @@
     return Promise.resolve().then(tryOne(prep.grey, 0)).then(tryOne(prep.soft, 0)).then(tryOne(prep.soft, 3));
   }
   function stripFrom(wk, prep, lab, len, slope, want, src, blur){
-    var a = Math.atan(slope), sx0 = lab.x1 + lab.h * .15, hh = lab.h * 1.2;
+    // tall enough for numbers bigger than the label and sitting a little higher or lower than it; marks
+    // from the rows above and below are dropped further down (they're centred too far away)
+    var a = Math.atan(slope), sx0 = lab.x1 + lab.h * .15, hh = lab.h * 2.6;
     len = Math.min(len, prep.w - sx0);
     if (len < lab.h * .8) return Promise.resolve([]);
     var k = Math.max(1, Math.min(4, 44 / lab.h)), W = Math.round(len * k), H = Math.round(hh * 2 * k);
@@ -283,9 +288,12 @@
     var d = x.getImageData(0, 0, W, H), px = d.data, n = W * H, lum = new Uint8Array(n);
     for (var i = 0; i < n; i++) lum[i] = px[i * 4];
     if (blur){ var fl = new Float32Array(lum); boxBlur(fl, W, H, blur); for (i = 0; i < n; i++) lum[i] = fl[i]; }
-    var sorted = Array.prototype.slice.call(lum).sort(function(p, q){ return p - q; }), med = sorted[n >> 1];
+    // brightness statistics from the row's own band (the strip is taller, and can take in panel art above/below)
+    var band = [], by0 = Math.max(0, Math.round(H / 2 - lab.h * k * 1.2)), by1 = Math.min(H, Math.round(H / 2 + lab.h * k * 1.2));
+    for (var yb = by0; yb < by1; yb++) for (var xb = 0; xb < W; xb++) band.push(lum[yb * W + xb]);
+    var sorted = band.sort(function(p, q){ return p - q; }), med = sorted[sorted.length >> 1];
     // ink threshold from this strip's own contrast: dim or washed-out text still separates from its box
-    var dark = med < 128, span = dark ? sorted[Math.floor(n * .99)] - med : med - sorted[Math.floor(n * .01)];
+    var dark = med < 128, span = dark ? sorted[Math.floor(sorted.length * .99)] - med : med - sorted[Math.floor(sorted.length * .01)];
     var thr = Math.max(35, Math.min(70, span * .45)), ink = new Uint8Array(n);
     for (i = 0; i < n; i++) ink[i] = dark ? (lum[i] > med + thr ? 1 : 0) : (lum[i] < med - thr ? 1 : 0);
     // connected marks; keep the ones shaped like digits of this row's text size
@@ -306,17 +314,23 @@
     }
     for (i = 0; i < n * 4; i += 4){ px[i] = px[i + 1] = px[i + 2] = 255; px[i + 3] = 255; }
     var any = false;
-    keep.forEach(function(b){
+    // a digit: about label-height to 2.4x it, not too wide, not running off the strip (edges and bars do),
+    // and centred on this row rather than the next one
+    var digitLike = function(b){
       var bh = b.y1 - b.y0 + 1, bw = b.x1 - b.x0 + 1;
-      if (bh < Lh * .45 || bh > Lh * 1.7 || bw > Lh * 1.3 || b.n < Lh * 2) return;
-      if (b.y0 <= 0 || b.y1 >= H - 1) return;     // runs off the strip: an edge or a bar, not a digit
+      if (bh < Lh * .45 || bh > Lh * 2.4 || bw > Lh * 1.8 || b.n < Lh * 2) return false;
+      if (b.y0 <= 0 || b.y1 >= H - 1) return false;
+      return Math.abs((b.y0 + b.y1) / 2 - H / 2) < Lh * 1.25;
+    };
+    keep.forEach(function(b){
+      if (!digitLike(b)) return;
       any = true;
       b.px.forEach(function(q){ px[q * 4] = px[q * 4 + 1] = px[q * 4 + 2] = 0; });
     });
     if (!any) return Promise.resolve([]);
     x.putImageData(d, 0, 0);
     // group the kept marks into numbers (digits close together), left to right
-    var marks = keep.filter(function(b){ var bh = b.y1 - b.y0 + 1, bw = b.x1 - b.x0 + 1; return !(bh < Lh * .45 || bh > Lh * 1.7 || bw > Lh * 1.3 || b.n < Lh * 2 || b.y0 <= 0 || b.y1 >= H - 1); })
+    var marks = keep.filter(digitLike)
       .sort(function(p, q){ return p.x0 - q.x0; });
     var groups = [];
     marks.forEach(function(b){ var g = groups[groups.length - 1]; if (g && b.x0 - g.x1 < Lh * .45 && g.marks.length < 2){ g.marks.push(b); g.x1 = Math.max(g.x1, b.x1); g.y0 = Math.min(g.y0, b.y0); g.y1 = Math.max(g.y1, b.y1); } else groups.push({marks:[b], x0:b.x0, x1:b.x1, y0:b.y0, y1:b.y1}); });
@@ -348,7 +362,11 @@
         });
       });
     });
-    return chain.then(function(){ return out; });
+    return chain.then(function(){
+      if (DBG) DBG.strips.push({kind:lab.kind, label:lab.t, x0:sx0, x1:sx0 + len, y:lab.y, hh:hh, slope:slope, src: src === prep.soft ? 'smoothed' : 'sharp', blur:blur || 0,
+        marks:marks.length, read:out.map(function(o){ return {t:o.t, x:o.x, y:o.y}; })});
+      return out;
+    });
   }
 
   // ---------- the reader ----------
@@ -359,11 +377,16 @@
     if (progressCb) progressCb(0, worker ? 'Reading the screen' : 'Getting the reader ready (first time downloads about 7 MB)');
     var dubs = opts.mode === 'doubles', stocks = Number(opts.stocks) || 3, full = stocks * (dubs ? 2 : 1), slots = dubs ? 2 : 1;
     var prep, wk, words = [], digits = [];
+    DBG = opts.debug ? {passes:[], strips:[]} : null;
     var page = function(canvas, psm, label){
       stepLabel = label;
       return wk.setParameters({tessedit_pageseg_mode: psm, tessedit_char_whitelist: ''})
         .then(function(){ return wk.recognize(canvas); })
-        .then(function(r){ words = words.concat(wordsOf(r, same())); });
+        .then(function(r){
+          var ws = wordsOf(r, same());
+          if (DBG){ ws.forEach(function(w){ w.pass = DBG.passes.length; }); DBG.passes.push({label:label, psm:psm, found:ws.length}); }
+          words = words.concat(ws);
+        });
     };
     var labelsFound = function(){
       var kinds = {};
@@ -394,7 +417,11 @@
         stepLabel = 'Trying harder (zooming in)';
         return wk.setParameters({tessedit_pageseg_mode: '11', tessedit_char_whitelist: ''})
           .then(function(){ return wk.recognize(c); })
-          .then(function(r){ words = words.concat(wordsOf(r, map)); });
+          .then(function(r){
+            var ws = wordsOf(r, map);
+            if (DBG){ ws.forEach(function(w){ w.pass = DBG.passes.length; }); DBG.passes.push({label:'Zoomed-in crop', psm:'11', found:ws.length}); }
+            words = words.concat(ws);
+          });
       })
       .then(function(){
         stepLabel = 'Reading the stats';
@@ -431,24 +458,65 @@
         // Group every label (any row) into player columns: in a column the KOs / Falls / SDs labels are stacked
         // with their left edges lined up. Two or more columns side by side = one set of labels per player.
         var ROW = {kos:0, falls:1, sds:2}, KLEN = {kos:3, falls:5, sds:3};
-        var cols = [];
-        labs.slice().sort(function(a, b){ return a.x0 - b.x0; }).forEach(function(l){
-          var c = cols.filter(function(c){ return Math.abs((c.x0 + slope * 0) - l.x0) < l.h * 2.2; })[0];
-          if (c){ c.labs.push(l); c.x0 = Math.min(c.x0, l.x0); c.x = (c.x * (c.labs.length - 1) + l.x) / c.labs.length; } else cols.push({x0:l.x0, x:l.x, labs:[l]});
+        // The player tags under each fighter's name (P1, P2, P3, P4) are the best anchors: they say exactly where
+        // each player's column starts, and the line through them gives the tilt.
+        var nAll = dubs ? 4 : 2, layout = null, tags = {};
+        words.forEach(function(w){
+          var m = String(w.t).match(/^[pP]?[pP]([1-4lI|])[.,:]?$/);
+          if (!m) return;
+          var n = /[1lI|]/.test(m[1]) ? 1 : +m[1];
+          if (n <= nAll && (!tags[n] || w.h > tags[n].h)) tags[n] = w;
         });
-        cols.sort(function(a, b){ return a.x0 - b.x0; });
-        var perPanel = cols.length >= 2 && cols[1].x0 - cols[0].x0 > cols[0].labs[0].h * 3;
+        var tagNs = Object.keys(tags).map(Number).sort(function(a, b){ return a - b; });
+        if (tagNs.length >= 2){
+          var mn = 0, mx0 = 0; tagNs.forEach(function(n){ mn += n; mx0 += tags[n].x0; }); mn /= tagNs.length; mx0 /= tagNs.length;
+          var sxy = 0, sxx = 0; tagNs.forEach(function(n){ sxy += (n - mn) * (tags[n].x0 - mx0); sxx += (n - mn) * (n - mn); });
+          var sp = sxy / sxx, th = tagNs.map(function(n){ return tags[n].h; }).sort(function(a, b){ return a - b; })[tagNs.length >> 1];
+          var monotonic = tagNs.every(function(n, i){ return !i || tags[n].x0 > tags[tagNs[i - 1]].x0; });
+          if (monotonic && sp > th * 4){
+            // tilt from the tops of the tags (OCR boxes can grab a stray mark below a tag, rarely above it)
+            var topOf = function(n){ return tags[n].y - tags[n].h / 2; };
+            var ax = 0, ay = 0; tagNs.forEach(function(n){ ax += tags[n].x; ay += topOf(n); }); ax /= tagNs.length; ay /= tagNs.length;
+            var nu = 0, de = 0; tagNs.forEach(function(n){ nu += (tags[n].x - ax) * (topOf(n) - ay); de += (tags[n].x - ax) * (tags[n].x - ax); });
+            ay += th / 2;
+            var tsl = de ? Math.max(-.2, Math.min(.2, nu / de)) : 0;
+            var x1 = mx0 + sp * (1 - mn);
+            layout = {x0:x1, spacing:sp, slope:tsl, tagH:th, tagY:ay + tsl * (x1 - ax), tags:tagNs};
+            slope = tsl;
+          }
+        }
+        var cols = [];
+        // the tags only organise the stats when the labels sit inside the player columns (not one table to the left)
+        var statsLayout = layout && labs.some(function(l){ var ci2 = Math.floor((l.x0 - layout.x0 + layout.spacing * .3) / layout.spacing); return ci2 >= 0 && ci2 < nAll; }) ? layout : null;
+        if (statsLayout){
+          // a column per player, in tag order; each label goes to the column it sits in
+          for (var ci = 0; ci < nAll; ci++) cols.push({x0:layout.x0 + ci * layout.spacing, x:layout.x0 + (ci + .3) * layout.spacing, labs:[]});
+          labs.forEach(function(l){
+            var ci2 = Math.floor((l.x0 - layout.x0 + layout.spacing * .3) / layout.spacing);
+            if (ci2 >= 0 && ci2 < nAll) cols[ci2].labs.push(l);
+          });
+        } else {
+          if (layout && !statsLayout) slope = layout.slope;
+          labs.slice().sort(function(a, b){ return a.x0 - b.x0; }).forEach(function(l){
+            var c = cols.filter(function(c){ return Math.abs(c.x0 - l.x0) < l.h * 2.2; })[0];
+            if (c){ c.labs.push(l); c.x0 = Math.min(c.x0, l.x0); c.x = (c.x * (c.labs.length - 1) + l.x) / c.labs.length; } else cols.push({x0:l.x0, x:l.x, labs:[l]});
+          });
+          cols.sort(function(a, b){ return a.x0 - b.x0; });
+        }
+        var perPanel = !!statsLayout || (cols.length >= 2 && cols[1].x0 - cols[0].x0 > cols[0].labs[0].h * 3);
         var panelCols = perPanel ? cols.map(function(c){ return c.x; }) : null;
         var have = function(c, k){ return c.labs.filter(function(l){ return l.kind === k; })[0]; };
         var widthFor = function(l, k){ return l.w / Math.max(2, String(l.t).replace(/[^A-Za-z0-9]/g, '').length || KLEN[l.kind]) * KLEN[k]; };
         if (perPanel){
-          // fill in a row label the OCR missed in Cooper's or Nathan's column
-          cols.slice(0, slots).forEach(function(c){
+          // fill in a row label the OCR missed in Cooper's or Nathan's column. Only our team's columns are
+          // used as a guide: the other team can be showing a different stats page with other rows.
+          var ours = cols.slice(0, slots);
+          [0, 1].forEach(function(){ ours.forEach(function(c, ci){
             ['kos', 'falls', 'sds'].forEach(function(k){
               if (have(c, k)) return;
               var ref = c.labs[0], lab = null;
-              // a) the same two rows in another column give the offset
-              var donor = cols.filter(function(o){ return have(o, k) && have(o, ref.kind); })[0];
+              // a) the same two rows in the teammate's column give the offset
+              var donor = ref && ours.filter(function(o){ return o !== c && have(o, k) && have(o, ref.kind); })[0];
               if (donor){
                 var dk = have(donor, k), dr = have(donor, ref.kind);
                 lab = {x0:ref.x0 + (dk.x0 - dr.x0), y:ref.y + (dk.y - dr.y), h:dk.h, w:dk.w};
@@ -456,12 +524,19 @@
                 // b) the rows are evenly spaced: work it out from the two rows this column does have
                 var p1 = c.labs[0], p2 = c.labs[1], step = (p2.y - p1.y) / (ROW[p2.kind] - ROW[p1.kind]);
                 if (isFinite(step) && step) lab = {x0:p1.x0, y:p1.y + step * (ROW[k] - ROW[p1.kind]), h:p1.h, w:widthFor(p1, k)};
+              } else if (statsLayout){
+                // c) no labels in this column at all (art can cover them): the teammate's row, one column over
+                var mate = ours.filter(function(o){ return o !== c && have(o, k); })[0];
+                if (mate){
+                  var t = have(mate, k), dx = c.x0 - mate.x0;
+                  lab = {x0:t.x0 + dx, y:t.y + slope * dx, h:t.h, w:t.w};
+                }
               }
               if (!lab) return;
               lab.kind = k; lab.t = '(filled)'; lab.lead = null; lab.x = lab.x0 + lab.w / 2; lab.x1 = lab.x0 + lab.w;
               c.labs.push(lab); labs.push(lab);
             });
-          });
+          }); });
           // the tilt, from the same row in two columns (e.g. Cooper's Falls and Nathan's Falls). This beats a
           // stack of labels, which perspective leans even when the photo is level.
           var pairs = [];
@@ -471,14 +546,13 @@
               if (a && b && b.x0 - a.x0 > a.h * 3) pairs.push((b.y - a.y) / (b.x0 - a.x0));
             }
           });
-          if (pairs.length){ pairs.sort(function(a, b){ return a - b; }); slope = Math.max(-.25, Math.min(.25, pairs[Math.floor(pairs.length / 2)])); }
+          if (pairs.length && !statsLayout){ pairs.sort(function(a, b){ return a - b; }); slope = Math.max(-.25, Math.min(.25, pairs[Math.floor(pairs.length / 2)])); }
         }
 
         // Probe for columns the OCR missed on the left. Glare or a dark corner can hide Cooper's labels
         // completely, and then the leftmost column found is really Nathan's. One column-width to the left,
         // at the same row heights, numbers mean there's a player column there.
-        var nAll = dubs ? 4 : 2;
-        var spacing = perPanel ? cols[1].x0 - cols[0].x0 : (function(){
+        var spacing = statsLayout ? statsLayout.spacing : perPanel ? cols[1].x0 - cols[0].x0 : (function(){
           var d = digits.slice().sort(function(a, b){ return a.x - b.x; }), gs = [];
           for (var i = 1; i < d.length; i++) if (Math.abs(d[i].h - d[i - 1].h) < d[i].h * .3) gs.push(d[i].x - d[i - 1].x);
           gs.sort(function(a, b){ return a - b; });
@@ -486,7 +560,7 @@
         })();
         var probes = Promise.resolve(), tries = 0;
         var probeOnce = function(){
-          if (!cols.length || !spacing || cols.length >= nAll || tries >= nAll - 1) return Promise.resolve(false);
+          if (statsLayout || !cols.length || !spacing || cols.length >= nAll || tries >= nAll - 1) return Promise.resolve(false);
           var base = cols[0], h0 = base.labs[0].h;
           if (spacing < h0 * 3 || base.x0 - spacing < -spacing * .15) return Promise.resolve(false);
           tries++;
@@ -523,7 +597,7 @@
             if (!cols.slice(0, slots).some(function(c){ return have(c, k); })) return;
             rows[k] = {vals:[null, null], layout:'panel'};
             for (var i = 0; i < Math.min(slots, cols.length); i++) (function(i){
-              var lab = have(cols[i], k);
+              var lab = cols[i] && have(cols[i], k);
               if (colX[i] == null) colX[i] = cols[i].x0 + gap * .3;
               if (!lab) return;
               // the number right after the label, inside this player's column
@@ -558,13 +632,73 @@
           });
         }
         return inner; });
-        return jobs.then(function(){ return {rows:rows, colX:colX, labs:labs, slope:slope, panelCols:panelCols}; });
+        return jobs.then(function(){
+          if (DBG){
+            DBG.labs = labs.map(function(l){ return {kind:l.kind, t:l.t, x0:l.x0, x1:l.x1, y:l.y, h:l.h, lead:l.lead}; });
+            DBG.cols = cols.map(function(c){ return {x0:c.x0, kinds:c.labs.map(function(l){ return l.kind; })}; });
+            DBG.perPanel = perPanel; DBG.slope = slope; DBG.rows = rows; DBG.spacing = spacing;
+          }
+          if (DBG) DBG.layout = layout;
+          return {rows:rows, colX:colX, labs:labs, slope:slope, panelCols:panelCols, layout:layout};
+        });
+      })
+      .then(function(st){
+        // with the tags known, read Cooper's placement digit straight from his name row (it can be gold, with
+        // laurels around it, which the blob finder doesn't always see)
+        if (!st.layout) return st;
+        var L = st.layout, x0 = L.x0 + L.spacing * .45, x1 = L.x0 + L.spacing * 1.02, y0 = L.tagY - L.tagH * 3.5, y1 = L.tagY + L.tagH * 1.2;
+        x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(prep.w, x1); y1 = Math.min(prep.h, y1);
+        if (x1 - x0 < 10 || y1 - y0 < 10) return st;
+        var z = Math.max(1, Math.min(4, 140 / (y1 - y0)));
+        var tryCrop = function(src){
+          var c = document.createElement('canvas'); c.width = Math.round((x1 - x0) * z); c.height = Math.round((y1 - y0) * z);
+          c.getContext('2d').drawImage(src, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+          return wk.setParameters({tessedit_pageseg_mode: '11', tessedit_char_whitelist: '12'}).then(function(){ return wk.recognize(c); }).then(function(r){
+            var best = null;
+            (r.data.words || []).forEach(function(w){
+              var t = String(w.text || '').trim(), hgt = (w.bbox.y1 - w.bbox.y0) / z;
+              if (/^[12]$/.test(t) && hgt > L.tagH * 1.1 && w.confidence >= 55 && (!best || hgt > best.h)) best = {ch:+t, h:hgt, conf:w.confidence};
+            });
+            return best;
+          });
+        };
+        stepLabel = 'Reading the placement';
+        // first by colour: the placement number is gold (1st) or white, tall, and shaped like a 1 or a 2
+        var byColour = (function(){
+          var C = prep.color, k3 = prep.k3, cx0 = Math.round(x0 * k3), cy0 = Math.round(y0 * k3), cw = Math.round((x1 - x0) * k3), chh = Math.round((y1 - y0) * k3);
+          if (cw < 8 || chh < 8) return null;
+          var dd = C.getContext('2d', {willReadFrequently: true}).getImageData(cx0, cy0, cw, chh).data, m = new Uint8Array(cw * chh);
+          for (var q = 0; q < m.length; q++){
+            var rr = dd[q * 4], gg = dd[q * 4 + 1], bb = dd[q * 4 + 2], lum = .299 * rr + .587 * gg + .114 * bb, chroma = Math.max(rr, gg, bb) - Math.min(rr, gg, bb);
+            var gold = rr > 140 && gg > 120 && bb < gg * .7 && rr - bb > 70;
+            var white = lum > 185 && chroma < 60;
+            m[q] = gold || white ? 1 : 0;
+          }
+          var blobs = blobsOf({mw:cw, mh:chh, k2:1}, m, true).filter(function(b){ return b.h >= L.tagH * k3 * 1.1 && (b.ch === 1 || b.ch === 2); });
+          blobs.sort(function(a, b){ return b.h - a.h; });
+          return blobs[0] ? {ch:blobs[0].ch, h:blobs[0].h / k3, how:'colour', d:blobs[0].d} : null;
+        })();
+        if (byColour){ if (DBG) DBG.headerPlace = {box:[x0, y0, x1, y1], read:byColour}; st.place = byColour.ch; return st; }
+        return tryCrop(prep.soft).then(function(b){ return b || tryCrop(prep.softInv); }).then(function(b){
+          if (DBG) DBG.headerPlace = {box:[x0, y0, x1, y1], read:b};
+          if (b) st.place = b.ch;
+          return st;
+        });
       })
       .then(function(st){
         progressCb = null; stepLabel = '';
         var out = decide(st, digits, prep, {dubs:dubs, stocks:stocks, full:full, slots:slots}, words);
-        if (!opts.fighters || !opts.fighters.length) return out;
-        return whoIsWho(prep, digits, st, words, dubs ? 4 : 2, opts.fighters, opts.prior, opts.learned).then(function(f){ out.fighters = f; return out; }, function(){ return out; });
+        var finish = function(){
+          if (DBG){
+            DBG.size = {w:prep.w, h:prep.h};
+            DBG.words = words.map(function(w){ return {t:w.t, x:w.x, y:w.y, w:w.w, h:w.h, pass:w.pass}; });
+            DBG.digits = digits.map(function(d){ return {ch:d.ch, x:d.x, y:d.y, h:d.h, d:d.d}; });
+            out.debug = DBG; DBG = null;
+          }
+          return out;
+        };
+        if (!opts.fighters || !opts.fighters.length) return finish();
+        return whoIsWho(prep, digits, st, words, dubs ? 4 : 2, opts.fighters, opts.prior, opts.learned).then(function(f){ out.fighters = f; return finish(); }, function(){ return finish(); });
       }, function(e){ progressCb = null; stepLabel = ''; throw e; });
   }
 
@@ -576,8 +710,14 @@
     var sdMe = cap(val('sds', 0), o.stocks), sdN = o.dubs ? cap(val('sds', 1), o.stocks) : null;
 
     // Cooper's placement: the big digit in his column (the far-left one if the columns aren't known)
-    var place = null;
-    if (digits.length){
+    var place = st.place != null ? st.place : null;
+    if (place === null && st.layout){
+      // the big digit in Cooper's name row, to the right of his name
+      var L = st.layout, hx0 = L.x0 + L.spacing * .45, hx1 = L.x0 + L.spacing * 1.02, hy0 = L.tagY - L.tagH * 3.5, hy1 = L.tagY + L.tagH * 1.2;
+      var inHead = digits.filter(function(d){ return d.x > hx0 && d.x < hx1 && d.y > hy0 && d.y < hy1; });
+      if (inHead.length) place = Math.min(2, inHead[0].ch);
+    }
+    if (place === null && digits.length){
       var labTop = st.labs.length ? Math.min.apply(null, st.labs.map(function(l){ return l.y; })) : prep.h;
       var top = digits.filter(function(d){ return d.y < labTop; }).sort(function(a, b){ return a.x - b.x; });
       var cx = st.colX[0];
@@ -608,6 +748,7 @@
       if (teamKos !== null){ margin = Math.max(1, Math.min(o.full, o.full - teamKos)); marginHow = 'their stocks minus your KOs (estimate)'; }
     }
 
+    if (DBG) DBG.decision = {place:place, teamFalls:teamFalls, byStats:byStats, result:result, confidence:confidence, how:how, margin:margin, marginHow:marginHow};
     var show = function(a, b){ return o.dubs ? (a === null ? '?' : a) + ' / ' + (b === null ? '?' : b) : (a === null ? '?' : String(a)); };
     var bits = [];
     if (place !== null) bits.push('placement ' + place);
@@ -698,6 +839,16 @@
     var W = prep.w, H = prep.h, centers = [], span;
     var d = digits.slice().sort(function(a, b){ return a.x - b.x; });
     var i;
+    if (st.layout){
+      // from the player tags: the art sits below the tag and above the stats
+      var L = st.layout, ours = st.labs.filter(function(l){ return l.x0 < L.x0 + L.spacing * 2; });
+      var bot = ours.length ? Math.min.apply(null, ours.map(function(l){ return l.y - l.h * 2; })) : L.tagY + L.spacing * 1.1;
+      return Array.apply(null, Array(n)).map(function(_, j){
+        var x0 = L.x0 + j * L.spacing, ty = L.tagY + L.slope * j * L.spacing;
+        return {x0:x0 + L.spacing * .05, x1:x0 + L.spacing * .9, cx:x0 + L.spacing * .47, span:L.spacing, y0:ty + L.tagH * .9, y1:Math.max(ty + L.tagH * 3, bot + L.slope * j * L.spacing),
+          nx0:x0 - L.spacing * .04, nx1:x0 + L.spacing * .98, ny0:ty - L.tagH * 4, ny1:ty + L.tagH * .4};
+      });
+    }
     if (d.length === n && n > 1){ span = (d[n - 1].x - d[0].x) / (n - 1); centers = d.map(function(q){ return q.x + span * .2; }); }
     else if (st.panelCols && st.panelCols.length >= 2){
       // one KOs / Falls / SDs label per column: the labels sit at the left of each panel
@@ -725,7 +876,12 @@
     });
     // 1) names written in a column
     var byName = boxes.map(function(b){
-      var ws = words.filter(function(w){ return w.x > b.x0 && w.x < b.x1 && /[A-Za-z]/.test(w.t) && !kindOf(w.t); }).sort(function(p, q){ return p.y - q.y || p.x - q.x; });
+      var ws = words.filter(function(w){
+        if (!/[A-Za-z]/.test(w.t) || kindOf(w.t)) return false;
+        // with the player tags known, names sit in the band just above the tag
+        if (b.nx0 != null) return w.x > b.nx0 && w.x < b.nx1 && w.y > b.ny0 && w.y < b.ny1;
+        return w.x > b.x0 && w.x < b.x1;
+      }).sort(function(p, q){ return p.y - q.y || p.x - q.x; });
       var best = null;
       for (var i = 0; i < ws.length; i++){
         var phrase = '';
@@ -737,6 +893,8 @@
           fighters.forEach(function(f){
             if (f.key.length < 3) return;
             var sc = similar(phrase, f.key), need = f.key.length >= 8 ? .75 : .82;
+            // the start of a name, cut off by the art or the edge ("BOWS" for Bowser)
+            if (phrase.length >= 4 && f.key.indexOf(phrase) === 0 && phrase.length < f.key.length) sc = Math.max(sc, .78 + .2 * phrase.length / f.key.length);
             // one whole word of a longer name ("FALCON" for Captain Falcon) counts, a little less
             if (f.parts.length > 1) f.parts.forEach(function(w){ var ws2 = similar(phrase, w) * .95; if (ws2 >= .8 && ws2 > sc){ sc = ws2; need = .8; } });
             if (sc >= need) hits.push({id:f.id, sc:sc});
@@ -788,6 +946,7 @@
         var alts = ranked.slice(0, 4).map(function(r){ return r.id; });
         // the column's colour signature, so the page can remember it once the fighter is confirmed
         var sig = cols[i] ? Array.prototype.map.call(cols[i], function(v){ return Math.round(v * 1000) / 1000; }) : null;
+        if (DBG){ (DBG.fboxes = DBG.fboxes || [])[i] = {box:b, byName:byName[i] || null, top:ranked.slice(0, 5).map(function(r){ return {id:r.id, sc:Math.round(r.sc * 1000) / 1000}; })}; }
         if (byName[i]) return {id:byName[i].id, how:'name', sig:sig, alts:[byName[i].id].concat(alts.filter(function(a){ return a !== byName[i].id; })).slice(0, 4)};
         if (!ranked.length) return {id:null, how:'none', sig:sig, alts:[]};
         return {id:ranked[0].id, how:'look', sig:sig, alts:alts};
