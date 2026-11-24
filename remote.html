@@ -246,6 +246,17 @@
   .phsheet .chips { display:flex; flex-wrap:wrap; gap:7px; }
   .phsheet .chips button { min-width:44px; padding:10px; border-radius:10px; border:1px solid rgba(23,20,15,.14); background:var(--paper); font-size:15px; }
   .phsheet .chips button.on { background:#ffd200; border-color:#ffd200; color:#18181f; }
+  .phsheet .fgrid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .phsheet .fcard { display:flex; flex-direction:column; gap:6px; padding:7px; border-radius:12px; background:#efece2; min-width:0; }
+  .phsheet .fmain { display:flex; align-items:center; gap:7px; min-width:0; }
+  .phsheet .fname { display:flex; flex-direction:column; flex:1; min-width:0; }
+  .phsheet .fname small { font-size:9px; font-weight:900; letter-spacing:.12em; opacity:.6; }
+  .phsheet .fname b { font-size:12.5px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .phsheet .fbadge { font-size:8.5px; font-weight:900; letter-spacing:.08em; padding:3px 6px; border-radius:5px; }
+  .phsheet .fbadge.read { background:#25ad49; color:#fff; } .phsheet .fbadge.guess { background:#f2c14e; color:#18181f; } .phsheet .fbadge.sess { background:rgba(23,20,15,.15); }
+  .phsheet .falts { display:flex; gap:5px; flex-wrap:wrap; } .phsheet .falt { padding:0; background:none; border:none; opacity:.8; }
+  .phsheet .nochip { width:34px; height:34px; border-radius:50%; background:rgba(23,20,15,.15); }
+  :root[data-theme="dark"] .phsheet .fcard{background:#2a2b34 !important} :root[data-theme="dark"] .phsheet .fbadge.sess{background:#3c3d48;color:#fff}
   .phsheet .stats { display:flex; flex-direction:column; gap:6px; }
   .phsheet .srow { display:grid; grid-template-columns:46px 1fr 1fr; gap:6px; align-items:center; }
   .phsheet .stats.solo .srow { grid-template-columns:46px 1fr; }
@@ -774,11 +785,20 @@
     S.pending = null; buzz(); drawSheet();
     var upd = function(patch){ if (S.photo && S.photo.token === token){ Object.assign(S.photo, patch); drawSheet(); } };
     if (!window.SmashPhoto){ upd({busy:false, done:true, err:'The photo reader did not load. Check your internet and reload.'}); return; }
-    window.SmashPhoto.read(file, {mode:get('mode'), stocks:stocks, onProgress:function(pct, label){ upd({pct:pct, label:label}); }})
+    indexFighters();
+    var keys = photoKeys(), mode = get('mode');
+    var fighters = S.fighters.map(function(f){ var img = D.kv['img:' + f.id]; return {id:f.id, name:f.name, img: typeof img === 'string' && /^data:image\//.test(img) ? img : null}; });
+    // how often each fighter turns up in each spot, for a gentle nudge when matching by look
+    var prior = keys.map(function(k){ var c = {}; D.matches.forEach(function(m){ if (m.mode === mode && m[k]) c[m[k]] = (c[m[k]] || 0) + 1; }); return c; });
+    window.SmashPhoto.read(file, {mode:mode, stocks:stocks, fighters:fighters, prior:prior, learned: window.SmashPhoto.learnedLooks ? window.SmashPhoto.learnedLooks() : {},
+      onProgress:function(pct, label){ upd({pct:pct, label:label}); }})
       .then(function(r){
         var full = fullStocks(get('mode'), stocks);
         upd({busy:false, done:true, read:r, result:r.result, margin: r.margin === null ? null : Math.min(full, r.margin), marginTouched:false,
-          koMe:r.koMe, koNathan:r.koNathan, fallsMe:r.fallsMe, fallsNathan:r.fallsNathan, sdMe:r.sdMe, sdNathan:r.sdNathan});
+          koMe:r.koMe, koNathan:r.koNathan, fallsMe:r.fallsMe, fallsNathan:r.fallsNathan, sdMe:r.sdMe, sdNathan:r.sdNathan,
+          fighters:r.fighters || null,
+          picks: keys.map(function(k, i){ return (r.fighters && r.fighters[i] && r.fighters[i].id) || get(k) || null; }),
+          pickHow: keys.map(function(k, i){ return r.fighters && r.fighters[i] && r.fighters[i].id ? r.fighters[i].how : 'session'; })});
         if (r.result) buzz([15, 30, 15]);
       })
       .catch(function(e){ upd({busy:false, done:true, err:(e && e.message) || 'Could not read that photo.', read:null, result:null, margin:null}); });
@@ -793,6 +813,7 @@
     if (p.result === 'L'){ var k = sum(p.koMe, p.koNathan); if (k !== null) return Math.max(1, Math.min(full, full - k)); }
     return p.margin == null ? null : p.margin;
   }
+  function photoKeys(){ return get('mode') === 'doubles' ? ['me', 'partner', 'opp1', 'opp2'] : ['me', 'opp1']; }
   function photoClose(){ if (S.photo) try { URL.revokeObjectURL(S.photo.url); } catch(e){} S.photo = null; drawSheet(); }
   function photoSheet(){
     var p = S.photo, dubs = get('mode') === 'doubles', stocks = Number(get('stocks')) || 3, full = fullStocks(get('mode'), stocks), r = p.read;
@@ -809,6 +830,15 @@
       var how = r && r.how ? 'How: ' + r.how + (r.marginHow && !p.marginTouched ? '; stocks = ' + r.marginHow : '') + '.' : '';
       out += '<div class="st'+(r && r.result && conf === 'high' ? ' ok' : '')+'"><span>'+esc(head)+'</span>'+(how ? '<small>'+esc(how)+'</small>' : '')+'<small>'+esc(r ? r.summary : 'You can still log it by hand here.')+'</small></div>';
       out += '<span class="lbl2">RESULT</span><div class="wl2"><button class="blk w'+(p.result === 'W' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="W">WIN</button><button class="blk l'+(p.result === 'L' ? ' on' : '')+'" data-act="photoSet" data-k="result" data-v="L">LOSS</button></div>';
+      var keys = photoKeys(), labels = dubs ? ['COOPER', 'NATHAN', 'OPPONENT 1', 'OPPONENT 2'] : ['COOPER', 'OPPONENT'];
+      var picks = p.picks || keys.map(get), how = p.pickHow || keys.map(function(){ return 'session'; });
+      out += '<span class="lbl2">FIGHTERS <i style="font-style:normal;opacity:.7;letter-spacing:.04em">tap another face to swap</i></span><div class="fgrid">' + keys.map(function(k, i){
+        var id = picks[i], h = how[i], det = p.fighters && p.fighters[i];
+        var pool = [].concat(det ? det.alts : [], get(k) ? [get(k)] : []).filter(function(x, j, a){ return x && x !== id && a.indexOf(x) === j; }).slice(0, 4);
+        var badge = h === 'name' ? ['READ', 'read'] : h === 'look' ? ['GUESS', 'guess'] : h === 'chosen' ? ['PICKED', 'read'] : ['SESSION', 'sess'];
+        return '<div class="fcard"><div class="fmain">' + (id ? chip(id, 34) : '<span class="nochip"></span>') + '<span class="fname"><small>' + labels[i] + '</small><b>' + esc(id ? nameOf(id) : 'Pick above') + '</b></span><span class="fbadge ' + badge[1] + '">' + badge[0] + '</span></div>' +
+          '<div class="falts">' + pool.map(function(a){ return '<button class="falt" data-act="photoFighter" data-i="' + i + '" data-v="' + esc(a) + '" title="' + esc(nameOf(a)) + '">' + chip(a, 26) + '</button>'; }).join('') + '</div></div>';
+      }).join('') + '</div>';
       var chips = '';
       for (var i = 0; i <= full; i++) chips += '<button class="blk'+(mg === i ? ' on' : '')+'" data-act="photoSet" data-k="margin" data-v="'+i+'">'+i+'</button>';
       out += '<span class="lbl2">'+(p.result === 'L' ? 'STOCKS THEY HAD LEFT' : 'STOCKS YOU HAD LEFT')+'</span><div class="chips">'+chips+'</div>';
@@ -987,6 +1017,13 @@
     },
     cancel: function(){ S.pending = null; S.rival = null; drawSheet(); },
     photoClose: photoClose,
+    photoFighter: function(el){
+      if (!S.photo) return;
+      var i = Number(el.dataset.i), keys = photoKeys();
+      S.photo.picks = (S.photo.picks || keys.map(get)).slice(); S.photo.picks[i] = el.dataset.v;
+      S.photo.pickHow = (S.photo.pickHow || keys.map(function(){ return 'session'; })).slice(); S.photo.pickHow[i] = 'chosen';
+      buzz(10); drawSheet();
+    },
     photoSet: function(el){
       if (!S.photo) return;
       if (el.dataset.k === 'margin'){ S.photo.margin = Number(el.dataset.v); S.photo.marginTouched = true; }
@@ -1004,8 +1041,14 @@
       if (!p || !p.result || p.busy) return;
       // the photo reads Cooper's side; logGame flips the tapped result when hand-off is on, so flip it first
       var res = get('handoffOn') ? (p.result === 'W' ? 'L' : 'W') : p.result;
-      var dubs = get('mode') === 'doubles', mg = photoMargin(p);
-      D.kv = Object.assign({}, D.kv, {koMe:p.koMe || 0, koNathan: dubs ? (p.koNathan || 0) : 0});
+      var dubs = get('mode') === 'doubles', mg = photoMargin(p), keys = photoKeys(), picks = p.picks || [];
+      var kvp = {koMe:p.koMe || 0, koNathan: dubs ? (p.koNathan || 0) : 0};
+      // the fighters from the photo (Cooper, Nathan, then the other side); with hand-off on, logGame swaps sides
+      var swapKey = {me:'opp1', partner:'opp2', opp1:'me', opp2:'partner'};
+      keys.forEach(function(k, i){ if (picks[i]) kvp[get('handoffOn') ? swapKey[k] : k] = picks[i]; });
+      D.kv = Object.assign({}, D.kv, kvp);
+      // remember what the confirmed fighters looked like, so the next read of this TV is better
+      if (p.fighters && window.SmashPhoto && window.SmashPhoto.remember) window.SmashPhoto.remember(p.fighters.map(function(f, i){ return {id:picks[i], sig:f && f.sig}; }));
       var extra = {photo:true};
       (dubs ? ['fallsMe', 'sdMe', 'fallsNathan', 'sdNathan'] : ['fallsMe', 'sdMe']).forEach(function(k){ if (p[k] != null) extra[k] = p[k]; });
       pendingExtra = extra;
