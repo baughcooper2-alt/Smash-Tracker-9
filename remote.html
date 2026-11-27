@@ -16,7 +16,6 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">
 <style>
   :root { --ink:#17140f; --paper:#fffdf7; --bg:#eef2ec; --yellow:#f2c14e; --red:#d4283a; --green:#1f9254; --blue:#1f6fd0; --dim:#e4e9e0; --pine:#14532d;
     --line:2.5px solid var(--ink); --ease:cubic-bezier(.22,1,.36,1); --navh:64px; }
@@ -355,12 +354,14 @@
   .toast { background:rgba(23,20,15,.92); color:#fff; border-radius:14px; letter-spacing:.06em; font-weight:700 !important; }
 
   /* ===== Smash-style theme (matches the tracker): rounded heavy type, colour tiles, yellow selection ===== */
-  @font-face{font-family:'SmashRound';font-style:normal;font-weight:100 500;font-display:swap;src:url(fonts/mplus-rounded-500.woff2) format('woff2')}
-  @font-face{font-family:'SmashRound';font-style:normal;font-weight:600 700;font-display:swap;src:url(fonts/mplus-rounded-700.woff2) format('woff2')}
-  @font-face{font-family:'SmashRound';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/mplus-rounded-800.woff2) format('woff2')}
-  @font-face{font-family:'SmashRound';font-style:normal;font-weight:900;font-display:swap;src:url(fonts/mplus-rounded-900.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:100 500;font-display:swap;src:url(fonts/mplus1p-500.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:600 700;font-display:swap;src:url(fonts/mplus1p-700.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:800;font-display:swap;src:url(fonts/mplus1p-800.woff2) format('woff2')}
+  @font-face{font-family:'SmashRound';font-style:normal;font-weight:900;font-display:swap;src:url(fonts/mplus1p-900.woff2) format('woff2')}
   :root{--sm-red:#e4202d;--sm-red2:#a90f1b;--sm-green:#25ad49;--sm-green2:#127a30;--sm-blue:#1f86e6;--sm-yellow:#ffd200;--sm-orange:#f39a1e;--sm-dark:#18181f}
-  html,body,body *{font-family:'SmashRound','M PLUS Rounded 1c',system-ui,-apple-system,sans-serif !important}
+  html,body,body *{font-family:'SmashRound','M PLUS 1p',system-ui,-apple-system,sans-serif !important}
+  /* titles, names and big numbers in a heavy italic, as in Smash Ultimate */
+  .big b,.rowhead .blk,.hero .rec,.hero .rate .blk,.tile2 .v,.lbl,.sheet .q,.fbtn .nm b,.stk button,.vs{font-style:italic}
   html,body{background-color:#eceef2 !important}
   body{background-image:linear-gradient(118deg,rgba(228,32,45,0) 0 58%,rgba(228,32,45,.08) 58% 71%,rgba(228,32,45,0) 71%),
     repeating-linear-gradient(118deg,rgba(24,24,31,.04) 0 2px,rgba(24,24,31,0) 2px 24px) !important;background-attachment:fixed !important}

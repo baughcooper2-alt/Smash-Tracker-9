@@ -17,7 +17,7 @@ A win/loss tracker for solo and doubles matches, built as an installable Progres
 - [sync.js](sync.js) — cloud sync engine shared by the tracker and the phone remote
 - [api/sync-config.js](api/sync-config.js) — Vercel function that hands the browser the Supabase URL and public key
 - [supabase/schema.sql](supabase/schema.sql) — database tables and access rules for cloud sync
-- [fonts/](fonts/) — M PLUS Rounded 1c, the rounded heavy typeface behind the Smash-style look (SIL Open Font License, see [fonts/OFL.txt](fonts/OFL.txt))
+- [fonts/](fonts/) — M PLUS 1p, a free lookalike of the square, heavy type in Smash Ultimate's menus, used for every tab, screen, pop-up and the phone remote, with headings and buttons slanted like the game's (SIL Open Font License, see [fonts/OFL.txt](fonts/OFL.txt))
 - [vendor/](vendor/) — third-party libraries (supabase-js for sync, qrcode-generator for the phone QR code)
 
 ## Running locally
@@ -94,7 +94,7 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
   - **Built for iPhone.** Big photos are shrunk in halving steps (shrinking in one go skips pixels and turns the TV's pixel grid into moiré), and the reader keeps its canvas memory low and frees it as soon as it's done, because Safari has a tight limit on canvas memory.
   - **The sheet** shows the photo, how it decided, WIN / LOSS, fighters, the stock count, and Cooper / Nathan steppers for KOs, Falls and SDs. Changing Falls or KOs updates the stock count unless you've tapped a stock. **WHAT THE CAMERA READ** shows the raw text. Then **✓ LOG IT** (or **↺ RETAKE**). Falls and SDs are saved on the game too.
   - The OCR engine (open-source Tesseract) downloads about 7 MB from jsDelivr on first use. For the best read, fill the frame with the TV and get the stats rows in.
-- **Fighter roulette** (top of the **RANDOM** tab): a slot machine with one reel for Cooper, plus one for Nathan in 2v2, filled from the fighter mix below it. Pull the lever (or **PULL!**) and the reels spin, tick and slow down, landing one after the other. The names stay hidden until each reel stops. **USE THESE** sends the fighters to Session. Each player gets one **VETO** a night: it re-spins just their reel and won't land on the same fighter again.
+- **Fighter roulette** (top of the **RANDOM** tab): a slot machine with one reel for Cooper, plus one for Nathan in 2v2, filled from the fighter mix below it. Pull the lever (or **PULL!**) and the reels spin, tick and slow down, landing one after the other. The names stay hidden until each reel stops. **USE THESE** sends the fighters to Session. Each player gets one **VETO** a night: it re-spins just their reel and won't land on the same fighter again. When the fighter mix is a duos preset (like Favorite Duos) and you're in 2v2, it lands on one of those duos, with Cooper and Nathan in a random order, and a veto re-spins to a different duo. The line under the title says what it draws from, and the footer shows whose veto is still ready tonight. The reels scale to the screen (one size on phones, bigger on a computer).
 - **NEW RECORD!** alerts: when a game breaks a Record Book record, a popup with the commentator's hype line shows the new mark and the old one. It covers longest win streak, most games, six-stocks and stock haul in a day, Cooper's and Nathan's most KOs in a game, most days in a row and most fighters in a day. Each record alerts at most once a day, and only once you have a few games logged (no popups for a brand-new history).
 - **↻ REMATCH** strip (tracker and phone remote): shows the last game, and its **WIN** / **LOSS** buttons put that game's exact setup back (mode, all four fighters, stage, items, stocks, rival) and go straight to the stock prompt.
 
@@ -105,9 +105,14 @@ On a computer (any window 900px or wider), tapping a fighter slot on **SESSION**
 ## Rivals tab
 
 **RIVALS** collects everyone you've played for real (games tagged under PLAYING AGAINST, or named when the app asks after the same opponents twice):
-- Overview tiles: rivals tracked, games against rivals (and their share of all games), your record against rivals, your toughest rival, and the rival you lead by the most.
+- Overview tiles: rivals tracked, games against rivals (and their share of all games), your record against rivals, your toughest rival, and the rival you lead by the most. Tap the toughest rival or the biggest lead to open them.
+- **Every number comes from one calculation**, so the overview, head to head and ledger always agree. Games count in the order they were played, a name counts the same whatever the capitals or stray spaces ("Jake", "jake ", "JAKE"), and a game with no stocks logged counts as 0 in the stock diff instead of breaking it. A W–L set by hand on a ledger card is added to the record and lead (with a note saying how much was hand-set); streaks, stock diff and the rest count logged games only.
+- **Filters:** ALL TIME / 90 DAYS / 30 DAYS / 7 DAYS / TODAY and BOTH / 1V1 / 2V2 narrow the head to head.
+- **▶ PLAY THEM NOW** sets the rival under PLAYING AGAINST and jumps to Session.
+- **Tap any recent-form square** to edit that game. The **game list** shows every game against them (newest first): **✎** edits one, **✕** untags a game that wasn't really against them.
+- **BEST PICK** (Cooper's best fighter against them, 2+ games) and **THEIR MAIN** (the fighter they bring most, with your record against it). Best picks are ranked so one lucky win doesn't outrank 10–2.
 - **Head to head:** tap a rival for a VS banner with the record, win rate and who holds the belt, then win rate, lead, current streak, best run and worst skid, stock differential (and per game), close-game record, six-stocks by you and by them, and when you first and last played. Below that: a recent-form strip, a running-lead chart (wins minus losses, game by game), the fighters they bring with your record against each, your best picks against them, and splits by 1v1/2v2, stage and items.
-- **All rivals · ledger:** the rivalry cards (with hand-edited W–L) moved here from Stats.
+- **All rivals · ledger:** the rivalry cards (with hand-edited W–L) moved here from Stats. Tap a name to open its head to head. **✎ RENAME** renames a rival everywhere (tagged games, hand edits, the auto-rival memory); renaming to another rival's name merges the two, which fixes a record split by a typo.
 
 ## Awards tab
 

@@ -13,7 +13,8 @@
   var reduced = function(){ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); };
 
   var CSS = [
-    '#fxr{position:fixed;inset:0;z-index:99990;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden;font-family:"Archivo Black",Archivo,system-ui,sans-serif}',
+    '#fxr{position:fixed;inset:0;z-index:99990;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow:hidden;font-family:"SmashRound","M PLUS 1p",system-ui,sans-serif;font-weight:900}',
+    '#fxr .t,#fxr .fxr-vs,#fxr.perfect .crown{font-style:italic}',
     '#fxr canvas{position:absolute;inset:0;width:100%;height:100%}',
     '#fxr .bg{position:absolute;inset:0}',
     '#fxr .t{position:relative;font-size:clamp(56px,13vw,150px);line-height:.9;letter-spacing:-.01em;color:#fffdf7;-webkit-text-stroke:3px #17140f;paint-order:stroke fill;text-align:center}',
